@@ -92,7 +92,8 @@ class _ModernProductDetailsScreenState extends State<ModernProductDetailsScreen>
                 barangay,
                 subscription_tier,
                 subscription_expires_at,
-                farmer_verifications!farmer_verifications_farmer_id_fkey(farm_name, status)
+                farmer_verifications!farmer_verifications_farmer_id_fkey(farm_name, status),
+                seller_statistics!seller_statistics_seller_id_fkey(average_rating, total_reviews, total_sales)
               ''')
               .eq('id', product.farmerId)
               .single();
@@ -1170,20 +1171,41 @@ class _ModernProductDetailsScreenState extends State<ModernProductDetailsScreen>
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Row(
-                          children: List.generate(5, (index) => Icon(
-                            Icons.star,
-                            size: 14,
-                            color: index < 5 ? AppTheme.featuredGold : Colors.grey.shade300,
-                          )),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '5.0 (95% positive)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
+                        // Get actual store rating
+                        Builder(
+                          builder: (context) {
+                            double storeRating = 0.0;
+                            int totalReviews = 0;
+                            
+                            if (_farmerStoreData != null) {
+                              final sellerStats = _farmerStoreData!['seller_statistics'];
+                              if (sellerStats is List && sellerStats.isNotEmpty) {
+                                storeRating = (sellerStats.first['average_rating'] ?? 0.0).toDouble();
+                                totalReviews = sellerStats.first['total_reviews'] ?? 0;
+                              }
+                            }
+                            
+                            return Row(
+                              children: [
+                                StarRatingDisplay(
+                                  rating: storeRating,
+                                  size: 14,
+                                  color: AppTheme.featuredGold,
+                                  emptyColor: Colors.grey.shade300,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  storeRating > 0 
+                                      ? '${storeRating.toStringAsFixed(1)} ($totalReviews ${totalReviews == 1 ? 'review' : 'reviews'})'
+                                      : 'No ratings yet',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                       ],
                     ),
