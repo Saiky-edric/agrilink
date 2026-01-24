@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lottie/lottie.dart';
+
 import '../../../core/services/cart_service.dart';
 import '../../../core/services/address_service.dart';
 import '../../../core/services/auth_service.dart';

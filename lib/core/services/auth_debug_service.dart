@@ -140,11 +140,13 @@ class AuthDebugService {
         print('   Access token starts with: ${session.accessToken.substring(0, 20)}...');
         print('   Token type: ${session.tokenType}');
         final expiresAt = session.expiresAt;
-        if (expiresAt != null && expiresAt is int) {
-          final expiresDate = DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000);
-          print('   Expires in: ${expiresDate.difference(DateTime.now()).inMinutes} minutes');
-        } else if (expiresAt != null) {
-          print('   Expires at: $expiresAt');
+        if (expiresAt != null) {
+          if (expiresAt is int) {
+            final expiresDate = DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000);
+            print('   Expires in: ${expiresDate.difference(DateTime.now()).inMinutes} minutes');
+          } else {
+            print('   Expires at: $expiresAt');
+          }
         }
       }
     } catch (e) {

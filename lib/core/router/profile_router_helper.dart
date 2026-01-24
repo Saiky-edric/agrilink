@@ -42,8 +42,6 @@ class ProfileRouterHelper {
             return const FarmerProfileScreen();
           case UserRole.admin:
             return const UnderDevelopmentScreen(featureName: 'Admin Profile');
-          default:
-            return const BuyerProfileScreen(); // Default fallback
         }
       },
     );
@@ -79,8 +77,6 @@ class ProfileRouterHelper {
             ),
           );
           break;
-        default:
-          context.go(RouteNames.buyerProfile);
       }
     } catch (e) {
       if (context.mounted) {
@@ -110,8 +106,6 @@ class ProfileRouterHelper {
           return RouteNames.farmerProfile;
         case UserRole.admin:
           return RouteNames.buyerProfile; // Fallback for now
-        default:
-          return RouteNames.buyerProfile;
       }
     } catch (e) {
       return RouteNames.buyerProfile; // Fallback

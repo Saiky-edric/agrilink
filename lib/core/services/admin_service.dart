@@ -288,7 +288,6 @@ class AdminService {
 
         final buyers = monthUsers.where((u) => u['role'] == 'buyer').length;
         final farmers = monthUsers.where((u) => u['role'] == 'farmer').length;
-        final totalMonth = buyers + farmers;
 
         final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -832,7 +831,7 @@ class AdminService {
         
         // Alternative: Use raw SQL to bypass RLS
         try {
-          final sqlResult = await _client.from('farmer_verifications').update({
+          await _client.from('farmer_verifications').update({
             'status': 'approved',
             'reviewed_at': DateTime.now().toIso8601String(),
             'reviewed_by_admin_id': currentUser.id,
