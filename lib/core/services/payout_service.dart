@@ -81,9 +81,10 @@ class PayoutService {
   Future<double> _calculateAvailableBalanceManual(String farmerId) async {
     final orders = await _client
         .from('orders')
-        .select('total_amount')
+        .select('total_amount, payment_method')
         .eq('farmer_id', farmerId)
         .eq('farmer_status', 'completed')
+        .not('payment_method', 'in', '(cod,cop)') // Exclude cash payments
         .or('farmer_payout_status.is.null,farmer_payout_status.eq.pending,farmer_payout_status.eq.available');
 
     double total = 0.0;
@@ -114,8 +115,9 @@ class PayoutService {
   Future<double> _calculatePendingEarningsManual(String farmerId) async {
     final orders = await _client
         .from('orders')
-        .select('total_amount')
+        .select('total_amount, payment_method')
         .eq('farmer_id', farmerId)
+        .not('payment_method', 'in', '(cod,cop)') // Exclude cash payments
         .inFilter('farmer_status', ['newOrder', 'accepted', 'toPack', 'toDeliver', 'readyForPickup']);
 
     double total = 0.0;
@@ -458,9 +460,10 @@ class PayoutService {
     try {
       final orders = await _client
           .from('orders')
-          .select('id, order_number, total_amount, created_at, farmer_status, farmer_payout_status')
+          .select('id, order_number, total_amount, payment_method, created_at, farmer_status, farmer_payout_status')
           .eq('farmer_id', farmerId)
           .eq('farmer_status', 'completed')
+          .not('payment_method', 'in', '(cod,cop)') // Only platform-paid orders
           .or('farmer_payout_status.is.null,farmer_payout_status.eq.pending,farmer_payout_status.eq.available')
           .order('created_at', ascending: false);
 
