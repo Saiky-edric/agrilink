@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:agrlink1/core/theme/app_theme.dart';
-import 'package:agrlink1/core/services/theme_service.dart';
-import 'package:agrlink1/features/auth/screens/login_screen.dart';
-import 'package:agrlink1/features/buyer/screens/home_screen.dart';
-import 'package:agrlink1/features/profile/screens/settings_screen.dart';
-import 'package:agrlink1/features/notifications/screens/notifications_screen.dart';
-import 'package:agrlink1/shared/widgets/custom_button.dart';
-import 'package:agrlink1/shared/widgets/custom_text_field.dart';
-import 'package:agrlink1/shared/widgets/product_card.dart';
-import 'package:agrlink1/shared/widgets/error_widgets.dart';
-import 'package:agrlink1/core/models/product_model.dart';
+import 'package:agrilink/core/theme/app_theme.dart';
+import 'package:agrilink/core/services/theme_service.dart';
+import 'package:agrilink/features/auth/screens/login_screen.dart';
+import 'package:agrilink/features/buyer/screens/home_screen.dart';
+import 'package:agrilink/features/profile/screens/settings_screen.dart';
+import 'package:agrilink/features/notifications/screens/notifications_screen.dart';
+import 'package:agrilink/shared/widgets/custom_button.dart';
+import 'package:agrilink/shared/widgets/custom_text_field.dart';
+import 'package:agrilink/shared/widgets/product_card.dart';
+import 'package:agrilink/shared/widgets/error_widgets.dart';
+import 'package:agrilink/core/models/product_model.dart';
 
 void main() {
   group('Login Screen Widget Tests', () {

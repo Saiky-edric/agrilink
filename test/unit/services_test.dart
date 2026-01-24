@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:agrlink1/core/services/auth_service.dart';
-import 'package:agrlink1/core/services/notification_service.dart';
-import 'package:agrlink1/core/services/product_service.dart';
-import 'package:agrlink1/core/services/cart_service.dart';
-import 'package:agrlink1/core/services/order_service.dart';
+import 'package:agrilink/core/services/auth_service.dart';
+import 'package:agrilink/core/services/notification_service.dart';
+import 'package:agrilink/core/services/product_service.dart';
+import 'package:agrilink/core/services/cart_service.dart';
+import 'package:agrilink/core/services/order_service.dart';
 
 void main() {
   group('AuthService Tests', () {

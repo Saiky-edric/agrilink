@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:agrlink1/core/services/order_service.dart';
+import 'package:agrilink/core/services/order_service.dart';
 
 void main() {
   group('J&T incremental fee (single parcel) - jtFeeForKg', () {

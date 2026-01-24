@@ -6,7 +6,7 @@ class BadgeHelper {
   static Future<void> updateCartBadge(BuildContext context) async {
     try {
       final badgeService = Provider.of<BadgeService>(context, listen: false);
-      await badgeService._loadCartCount();
+      await badgeService.loadCartCount();
     } catch (e) {
       print('Error updating cart badge: $e');
     }
@@ -15,7 +15,7 @@ class BadgeHelper {
   static Future<void> updateMessageBadge(BuildContext context) async {
     try {
       final badgeService = Provider.of<BadgeService>(context, listen: false);
-      await badgeService._loadMessageCount();
+      await badgeService.refreshNotificationCount();
     } catch (e) {
       print('Error updating message badge: $e');
     }
@@ -24,7 +24,7 @@ class BadgeHelper {
   static Future<void> updateOrderBadge(BuildContext context) async {
     try {
       final badgeService = Provider.of<BadgeService>(context, listen: false);
-      await badgeService._loadOrderCount();
+      await badgeService.initializeBadges();
     } catch (e) {
       print('Error updating order badge: $e');
     }
@@ -33,7 +33,7 @@ class BadgeHelper {
   static Future<void> updateNotificationBadge(BuildContext context) async {
     try {
       final badgeService = Provider.of<BadgeService>(context, listen: false);
-      await badgeService._loadNotificationCount();
+      await badgeService.refreshNotificationCount();
     } catch (e) {
       print('Error updating notification badge: $e');
     }

@@ -4,7 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:agrlink1/shared/widgets/tractor_icon_painter.dart';
+import 'package:agrilink/shared/widgets/tractor_icon_painter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
