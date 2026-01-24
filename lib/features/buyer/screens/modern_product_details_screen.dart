@@ -104,6 +104,7 @@ class _ModernProductDetailsScreenState extends State<ModernProductDetailsScreen>
           debugPrint('🏪 Avatar: ${farmerData['avatar_url']}');
           debugPrint('🏪 Full name: ${farmerData['full_name']}');
           debugPrint('🏪 Verifications: ${farmerData['farmer_verifications']}');
+          debugPrint('🏪 Seller Statistics: ${farmerData['seller_statistics']}');
           
           _farmerStoreData = farmerData;
           debugPrint('🏪 Data assigned to state variable');
@@ -141,6 +142,37 @@ class _ModernProductDetailsScreenState extends State<ModernProductDetailsScreen>
         _error = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  Future<Map<String, dynamic>> _fetchStoreRating(String farmerId) async {
+    try {
+      final reviews = await Supabase.instance.client
+          .from('seller_reviews')
+          .select('rating')
+          .eq('seller_id', farmerId);
+
+      double averageRating = 0.0;
+      int totalReviews = reviews.length;
+      
+      if (totalReviews > 0) {
+        int totalRating = 0;
+        for (final review in reviews) {
+          totalRating += (review['rating'] as int? ?? 0);
+        }
+        averageRating = totalRating / totalReviews;
+      }
+
+      return {
+        'average_rating': averageRating,
+        'total_reviews': totalReviews,
+      };
+    } catch (e) {
+      debugPrint('⚠️ Error fetching store rating: $e');
+      return {
+        'average_rating': 0.0,
+        'total_reviews': 0,
+      };
     }
   }
 
@@ -1169,45 +1201,39 @@ class _ModernProductDetailsScreenState extends State<ModernProductDetailsScreen>
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        // Get actual store rating
-                        Builder(
-                          builder: (context) {
-                            double storeRating = 0.0;
-                            int totalReviews = 0;
-                            
-                            if (_farmerStoreData != null) {
-                              final sellerStats = _farmerStoreData!['seller_statistics'];
-                              if (sellerStats is List && sellerStats.isNotEmpty) {
-                                storeRating = (sellerStats.first['average_rating'] ?? 0.0).toDouble();
-                                totalReviews = sellerStats.first['total_reviews'] ?? 0;
-                              }
-                            }
-                            
-                            return Row(
-                              children: [
-                                StarRatingDisplay(
-                                  rating: storeRating,
-                                  size: 14,
-                                  color: AppTheme.featuredGold,
-                                  emptyColor: Colors.grey.shade300,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  storeRating > 0 
-                                      ? '${storeRating.toStringAsFixed(1)} ($totalReviews ${totalReviews == 1 ? 'review' : 'reviews'})'
-                                      : 'No ratings yet',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                      ],
+                    // Store Rating - using FutureBuilder to fetch from seller_reviews
+                    FutureBuilder<Map<String, dynamic>>(
+                      future: _fetchStoreRating(p.farmerId),
+                      builder: (context, snapshot) {
+                        double storeRating = 0.0;
+                        int totalReviews = 0;
+                        
+                        if (snapshot.hasData) {
+                          storeRating = snapshot.data!['average_rating'] ?? 0.0;
+                          totalReviews = snapshot.data!['total_reviews'] ?? 0;
+                        }
+                        
+                        return Row(
+                          children: [
+                            StarRatingDisplay(
+                              rating: storeRating,
+                              size: 14,
+                              color: AppTheme.featuredGold,
+                              emptyColor: Colors.grey.shade300,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              storeRating > 0 
+                                  ? '${storeRating.toStringAsFixed(1)} ($totalReviews ${totalReviews == 1 ? 'review' : 'reviews'})'
+                                  : 'No ratings yet',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
