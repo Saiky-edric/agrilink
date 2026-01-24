@@ -235,39 +235,12 @@ class _ProductCardState extends State<ProductCard> {
                       ),
                     ),
 
-                  // Fresh badge - Only show if not expired
+                  // Freshness badge - Based on shelf life
                   if (!widget.product.isExpired)
                     Positioned(
                       top: AppSpacing.sm,
                       left: AppSpacing.sm,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppTheme.successGreen,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.verified,
-                              color: AppTheme.textOnPrimary,
-                              size: 12,
-                            ),
-                            const SizedBox(width: 2),
-                            Text(
-                              'Fresh',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: AppTheme.textOnPrimary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      child: _buildFreshnessBadge(),
                     ),
                 ],
               ),
@@ -359,6 +332,71 @@ class _ProductCardState extends State<ProductCard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Build freshness badge based on days until expiry
+  Widget _buildFreshnessBadge() {
+    final daysRemaining = widget.product.daysUntilExpiry;
+    
+    String badgeText;
+    IconData badgeIcon;
+    Color badgeColor;
+    
+    // Badge system based on shelf life documentation - Shortened for space
+    if (daysRemaining == 0) {
+      badgeText = 'Today';
+      badgeIcon = Icons.spa_rounded;
+      badgeColor = const Color(0xFF2E7D32); // Dark green for urgency
+    } else if (daysRemaining <= 2) {
+      badgeText = 'Fresh';
+      badgeIcon = Icons.eco_rounded;
+      badgeColor = const Color(0xFF388E3C); // Medium green
+    } else if (daysRemaining <= 5) {
+      badgeText = 'Quality';
+      badgeIcon = Icons.verified_rounded;
+      badgeColor = AppTheme.successGreen; // Standard green
+    } else {
+      badgeText = 'Very Fresh';
+      badgeIcon = Icons.local_florist_rounded;
+      badgeColor = const Color(0xFF66BB6A); // Light green
+    }
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        color: badgeColor,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: badgeColor.withOpacity(0.3),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            badgeIcon,
+            color: Colors.white,
+            size: 12,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            badgeText,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -384,9 +384,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void _showSuccessAndNavigate(String message) {
     showDialog(
       context: context,
-      barrierDismissible: true, // Allow tapping outside to close
+      barrierDismissible: false, // Prevent tapping outside to close (force user to choose action)
       builder: (context) => PopScope(
-        canPop: true, // Allow back button to close
+        canPop: false, // Prevent back button from closing (force user to choose action)
         child: Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           elevation: 8,
@@ -573,7 +573,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ),
                       child: Icon(Icons.close, size: 20, color: Colors.grey.shade700),
                     ),
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () {
+                      Navigator.of(context).pop(); // Close dialog
+                      context.go(RouteNames.buyerHome); // Navigate away from checkout
+                    },
                     tooltip: 'Close',
                   ),
                 ),

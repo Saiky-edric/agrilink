@@ -935,26 +935,61 @@ class _FarmerOrderDetailsScreenState extends State<FarmerOrderDetailsScreen> {
             ),
           ),
         ] else if (_order!.farmerStatus == FarmerOrderStatus.toPack) ...[
+          // Check delivery method to show correct next status
+          if (_order!.deliveryMethod == 'pickup') ...[
+            // Pickup orders: toPack → readyForPickup
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _updateOrderStatus(FarmerOrderStatus.readyForPickup),
+                icon: const Icon(Icons.store_rounded),
+                label: const Text('Mark Ready for Pick-up'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.purple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ] else ...[
+            // Delivery orders: toPack → toDeliver
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _updateOrderStatusWithDeliveryInfo(FarmerOrderStatus.toDeliver),
+                icon: const Icon(Icons.local_shipping),
+                label: const Text('Mark as Packed - Ready for Delivery'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.indigo,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ],
+        ] else if (_order!.farmerStatus == FarmerOrderStatus.toDeliver) ...[
+          // Delivery orders: toDeliver → completed
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () => _updateOrderStatusWithDeliveryInfo(FarmerOrderStatus.toDeliver),
-              icon: const Icon(Icons.local_shipping),
-              label: const Text('Mark as Packed - Ready for Delivery'),
+              onPressed: () => _updateOrderStatusWithDeliveryInfo(FarmerOrderStatus.completed),
+              icon: const Icon(Icons.check_circle_rounded),
+              label: const Text('Mark as Delivered'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple,
+                backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
             ),
           ),
-        ] else if (_order!.farmerStatus == FarmerOrderStatus.toDeliver) ...[
+        ] else if (_order!.farmerStatus == FarmerOrderStatus.readyForPickup) ...[
+          // Pickup orders: readyForPickup → completed
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () => _updateOrderStatusWithDeliveryInfo(FarmerOrderStatus.completed),
-              icon: const Icon(Icons.done_all),
-              label: const Text('Mark as Delivered'),
+              onPressed: () => _updateOrderStatus(FarmerOrderStatus.completed),
+              icon: const Icon(Icons.check_circle_rounded),
+              label: const Text('Mark as Picked Up'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,

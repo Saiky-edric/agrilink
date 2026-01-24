@@ -195,8 +195,8 @@ class OrderService {
         debugPrint('🔍 DEBUG: Converting farmer status enum to string: "$statusString"');
         debugPrint('🔍 DEBUG: Enum toString: ${farmerStatus.toString()}');
         
-        // Validation check
-        final validStatuses = ['newOrder', 'accepted', 'toPack', 'toDeliver', 'completed', 'cancelled'];
+        // Validation check - includes readyForPickup for pickup orders
+        final validStatuses = ['newOrder', 'accepted', 'toPack', 'toDeliver', 'readyForPickup', 'completed', 'cancelled'];
         if (!validStatuses.contains(statusString)) {
           debugPrint('❌ DEBUG: INVALID STATUS DETECTED: "$statusString"');
           throw Exception('Invalid farmer status: "$statusString". Valid: $validStatuses');
@@ -391,8 +391,8 @@ class OrderService {
         final statusString = farmerStatus.name;
         debugPrint('🔍 DEBUG: Converting farmer status enum to string: "$statusString"');
         
-        // Validation check
-        final validStatuses = ['newOrder', 'accepted', 'toPack', 'toDeliver', 'completed', 'cancelled'];
+        // Validation check - includes readyForPickup for pickup orders
+        final validStatuses = ['newOrder', 'accepted', 'toPack', 'toDeliver', 'readyForPickup', 'completed', 'cancelled'];
         if (!validStatuses.contains(statusString)) {
           debugPrint('❌ DEBUG: INVALID STATUS DETECTED: "$statusString"');
           throw Exception('Invalid farmer status: "$statusString". Valid: $validStatuses');
@@ -658,7 +658,8 @@ class OrderService {
         'delivery_address': deliveryAddress,
         'special_instructions': specialInstructions,
         'delivery_method': deliveryMethod, // NEW: 'delivery' or 'pickup'
-        'payment_method': paymentMethod, // Payment method: 'cod', 'cop', 'gcash'
+        'payment_method': paymentMethod, // Payment method type: 'cod', 'cop', 'gcash'
+        'payment_status': paymentMethod == 'gcash' ? 'pending' : 'pending', // Payment status
         'buyer_status': BuyerOrderStatus.pending.name,
         'farmer_status': FarmerOrderStatus.newOrder.name,
         'created_at': now,

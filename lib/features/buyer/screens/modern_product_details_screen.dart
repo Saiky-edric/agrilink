@@ -1243,32 +1243,36 @@ class _ModernProductDetailsScreenState extends State<ModernProductDetailsScreen>
 
     final daysRemaining = p.daysUntilExpiry;
     final isExpired = p.isExpired;
-    final isExpiringWithin3Days = p.isExpiringWithin3Days;
     
-    Color statusColor = AppTheme.textPrimary;
     IconData statusIcon = Icons.schedule_outlined;
     String statusText = '';
 
-    if (isExpired) {
-      statusColor = AppTheme.errorRed;
-      statusIcon = Icons.warning_amber_rounded;
-      statusText = 'Expired ${(-daysRemaining)} ${(-daysRemaining) == 1 ? 'day' : 'days'} ago';
-    } else if (daysRemaining == 0) {
-      statusColor = AppTheme.errorRed;
-      statusIcon = Icons.timer_outlined;
-      statusText = 'Expires today!';
+    // Don't show shelf life info if product is expired
+    if (isExpired) return const SizedBox.shrink();
+    
+    // Always use positive green color for freshness
+    String badgeText = '';
+
+    if (daysRemaining == 0) {
+      statusIcon = Icons.spa_rounded;
+      statusText = 'Best quality until today';
+      badgeText = 'Order Today';
     } else if (daysRemaining == 1) {
-      statusColor = AppTheme.warningOrange;
-      statusIcon = Icons.timer_outlined;
-      statusText = 'Expires tomorrow (1 day left)';
-    } else if (isExpiringWithin3Days) {
-      statusColor = AppTheme.warningOrange;
-      statusIcon = Icons.timer_outlined;
-      statusText = '$daysRemaining days remaining';
+      statusIcon = Icons.eco_rounded;
+      statusText = 'Within peak freshness window';
+      badgeText = 'Farm Fresh';
+    } else if (daysRemaining <= 2) {
+      statusIcon = Icons.eco_rounded;
+      statusText = 'Within peak freshness window';
+      badgeText = 'Farm Fresh';
+    } else if (daysRemaining <= 5) {
+      statusIcon = Icons.verified_rounded;
+      statusText = 'Peak freshness guaranteed';
+      badgeText = 'Quality Guaranteed';
     } else {
-      statusColor = AppTheme.textPrimary;
-      statusIcon = Icons.schedule_outlined;
-      statusText = '$daysRemaining days remaining';
+      statusIcon = Icons.verified_rounded;
+      statusText = 'Freshly harvested';
+      badgeText = 'Very Fresh';
     }
 
     return Padding(
@@ -1278,13 +1282,23 @@ class _ModernProductDetailsScreenState extends State<ModernProductDetailsScreen>
         children: [
           SizedBox(
             width: 100,
-            child: Text(
-              'Freshness',
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.eco_rounded,
+                  size: 16,
+                  color: AppTheme.primaryGreen,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Freshness',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 16),
@@ -1292,40 +1306,75 @@ class _ModernProductDetailsScreenState extends State<ModernProductDetailsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Icon(
-                      statusIcon,
-                      size: 16,
-                      color: statusColor,
+                // Badge with positive message
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryGreen.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.primaryGreen.withOpacity(0.3),
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        statusText,
-                        style: TextStyle(
-                          color: statusColor,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        statusIcon,
+                        size: 14,
+                        color: AppTheme.primaryGreen,
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          badgeText,
+                          style: const TextStyle(
+                            color: AppTheme.primaryGreen,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
+                Text(
+                  statusText,
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: true,
+                ),
+                const SizedBox(height: 6),
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.calendar_today_outlined,
-                      size: 14,
-                      color: Colors.grey.shade500,
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Icon(
+                        Icons.spa_rounded,
+                        size: 14,
+                        color: AppTheme.primaryGreen.withOpacity(0.7),
+                      ),
                     ),
                     const SizedBox(width: 4),
-                    Text(
-                      'Expires: ${_formatDate(_product!.expiryDate)}',
-                      style: TextStyle(
-                        color: Colors.grey.shade500,
-                        fontSize: 12,
+                    Expanded(
+                      child: Text(
+                        'Best quality until ${_formatDate(_product!.expiryDate)}',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 12,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: true,
                       ),
                     ),
                   ],
@@ -1430,18 +1479,30 @@ class _ModernProductDetailsScreenState extends State<ModernProductDetailsScreen>
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Added $_quantity ${_product!.name} to cart!'),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('Added $_quantity ${_product!.name} to cart!'),
+                ),
+              ],
+            ),
             backgroundColor: AppTheme.successGreen,
-            duration: const Duration(seconds: 3),
+            duration: const Duration(milliseconds: 2500),
             behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
             action: SnackBarAction(
-              label: 'View Cart',
+              label: 'VIEW CART',
               textColor: Colors.white,
               onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
                 context.go(RouteNames.cart);
               },
             ),
+            dismissDirection: DismissDirection.horizontal,
           ),
         );
       }
@@ -1469,7 +1530,12 @@ class _ModernProductDetailsScreenState extends State<ModernProductDetailsScreen>
     // Add to cart and go to checkout
     await _addToCart();
     if (mounted) {
-      context.go(RouteNames.cart);
+      // Wait briefly to show the snackbar, then navigate
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        context.go(RouteNames.cart);
+      }
     }
   }
 

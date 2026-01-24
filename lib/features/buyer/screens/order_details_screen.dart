@@ -105,6 +105,20 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     }
   }
 
+  // Common cancellation reasons
+  final List<String> _cancellationReasons = [
+    'Changed my mind',
+    'Found a better price elsewhere',
+    'Ordered by mistake',
+    'Delivery time too long',
+    'Need items sooner',
+    'Product no longer needed',
+    'Concerns about product quality',
+    'Want to change order items',
+    'Financial reasons',
+    'Other',
+  ];
+
   Future<void> _cancelOrder() async {
     if (_order == null || _isCancelling) return;
 
@@ -120,26 +134,117 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       return;
     }
 
-    // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
+    // Show cancellation dialog with reason selector
+    String? selectedReason;
+    
+    final confirmed = await showDialog<String>(
       context: context,
-      builder: (context) => CancelOrderDialog(
-        onConfirm: () => Navigator.of(context).pop(true),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Cancel Order'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Are you sure you want to cancel this order?'),
+                const SizedBox(height: 16),
+                const Text(
+                  'Please select a reason:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: selectedReason,
+                      hint: const Text('Select reason'),
+                      isExpanded: true,
+                      items: _cancellationReasons.map((reason) {
+                        return DropdownMenuItem<String>(
+                          value: reason,
+                          child: Text(
+                            reason,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedReason = value;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'This action cannot be undone',
+                          style: TextStyle(fontSize: 13, color: Colors.orange),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Keep Order'),
+            ),
+            TextButton(
+              onPressed: selectedReason == null
+                  ? null
+                  : () {
+                      Navigator.pop(context, selectedReason);
+                    },
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.errorRed,
+              ),
+              child: const Text('Cancel Order'),
+            ),
+          ],
+        ),
       ),
     );
 
-    if (confirmed != true) return;
+    if (confirmed == null) return;
 
     setState(() => _isCancelling = true);
 
     try {
-      await _orderService.cancelOrder(orderId: _order!.id);
+      await _orderService.cancelOrder(
+        orderId: _order!.id,
+        cancelReason: confirmed,
+      );
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Order cancelled successfully'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppTheme.successGreen,
           ),
         );
         
@@ -151,7 +256,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error cancelling order: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.errorRed,
           ),
         );
       }

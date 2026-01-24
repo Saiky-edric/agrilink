@@ -29,6 +29,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with TickerProviderSt
   late Animation<double> _fadeAnimation;
   
   List<ProductModel> _featuredProducts = []; // Premium products for featured carousel
+  Map<String, String> _featuredStoreNames = {}; // Store names for featured products
   List<ProductModel> _allProducts = []; // All products for product grid
   final List<String> _categories = ['Vegetables', 'Fruits', 'Grains', 'Dairy', 'Organic', 'Spices'];
   bool _isLoading = true;
@@ -134,6 +135,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with TickerProviderSt
           .limit(50); // Get more products to enable rotation
 
       final premiumProducts = <ProductModel>[];
+      final storeNames = <String, String>{}; // productId -> storeName
+      
       for (final item in response) {
         final farmer = item['farmer'] as Map<String, dynamic>?;
         final tier = farmer?['subscription_tier'] as String? ?? 'free';
@@ -143,7 +146,18 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with TickerProviderSt
             (expiresAt == null || DateTime.parse(expiresAt).isAfter(DateTime.now()));
         
         if (isPremium) {
-          premiumProducts.add(ProductModel.fromJson(item));
+          final product = ProductModel.fromJson(item);
+          premiumProducts.add(product);
+          
+          // Get store name: priority is store_name > farm_name from product
+          String storeName = product.farmName;
+          if (farmer != null) {
+            final customStoreName = farmer['store_name']?.toString().trim();
+            if (customStoreName != null && customStoreName.isNotEmpty) {
+              storeName = customStoreName;
+            }
+          }
+          storeNames[product.id] = storeName;
         }
       }
       
@@ -152,10 +166,17 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with TickerProviderSt
       // Apply daily rotation using today's date as seed
       final rotatedProducts = _applyDailyRotation(premiumProducts, maxCount: 10);
       
+      // Filter store names for rotated products only
+      final rotatedStoreNames = <String, String>{};
+      for (final product in rotatedProducts) {
+        rotatedStoreNames[product.id] = storeNames[product.id] ?? product.farmName;
+      }
+      
       EnvironmentConfig.log('Selected ${rotatedProducts.length} products for today\'s featured carousel');
       
       setState(() {
         _featuredProducts = rotatedProducts;
+        _featuredStoreNames = rotatedStoreNames;
       });
     } catch (e) {
       EnvironmentConfig.logError('Failed to load featured products', e);
@@ -509,6 +530,9 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with TickerProviderSt
   }
   
   Widget _buildFullWidthProductCard(ProductModel product) {
+    // Get the store name from the map, fallback to product.farmName
+    final storeName = _featuredStoreNames[product.id] ?? product.farmName;
+    
     return GestureDetector(
       onTap: () => context.push('/buyer/product/${product.id}'),
       child: Container(
@@ -719,7 +743,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with TickerProviderSt
                         
                         const SizedBox(height: 6),
                         
-                        // Farm Name with location icon
+                        // Store Name with location icon
                         Row(
                           children: [
                             Icon(
@@ -730,7 +754,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with TickerProviderSt
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
-                                product.farmName,
+                                storeName,
                                 style: TextStyle(
                                   color: Colors.white.withOpacity(0.95),
                                   fontSize: 14,
@@ -949,14 +973,14 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with TickerProviderSt
   }
 
   Widget _buildCategoryCard(String category) {
-    // Match icons with categories screen
-    final icons = {
-      'Vegetables': Icons.eco,              // Eco-friendly vegetables
-      'Fruits': Icons.apple,                 // Apple for fruits
-      'Grains': Icons.grain,                 // Grain icon
-      'Dairy': Icons.local_drink,            // Dairy/milk icon
-      'Organic': Icons.eco,                  // Organic/eco icon
-      'Spices': Icons.local_florist,         // Herbs/spices
+    // Match emoji icons with public store screen - using same emojis as ProductCategory widget
+    final emojiIcons = {
+      'Vegetables': '🥬',   // Same as public_farmer_profile_screen
+      'Fruits': '🍎',       // Same as public_farmer_profile_screen
+      'Grains': '🌾',       // Same as public_farmer_profile_screen
+      'Dairy': '🥛',        // Milk emoji for dairy
+      'Organic': '🌱',      // Sprout emoji for organic
+      'Spices': '🌿',       // Same as herbs in public_farmer_profile_screen
     };
 
     // Modern gradient colors for each category - MORE VIBRANT
@@ -988,7 +1012,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with TickerProviderSt
           borderRadius: BorderRadius.circular(16),
           child: Column(
             children: [
-              // Modern card with gradient and shadow
+              // Modern card with gradient and shadow - now with emoji icon
               Container(
                 width: 56,
                 height: 56,
@@ -1011,10 +1035,11 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with TickerProviderSt
                     width: 1.5,
                   ),
                 ),
-                child: Icon(
-                  icons[category] ?? Icons.category,
-                  color: iconColors[category] ?? AppTheme.primaryGreen,
-                  size: 26,
+                child: Center(
+                  child: Text(
+                    emojiIcons[category] ?? '🌱',
+                    style: const TextStyle(fontSize: 28),
+                  ),
                 ),
               ),
               const SizedBox(height: AppSpacing.xs),

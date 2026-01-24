@@ -10,7 +10,8 @@ class StoreCustomizationScreen extends StatefulWidget {
   const StoreCustomizationScreen({super.key});
 
   @override
-  State<StoreCustomizationScreen> createState() => _StoreCustomizationScreenState();
+  State<StoreCustomizationScreen> createState() =>
+      _StoreCustomizationScreenState();
 }
 
 class _StoreCustomizationScreenState extends State<StoreCustomizationScreen>
@@ -18,16 +19,18 @@ class _StoreCustomizationScreenState extends State<StoreCustomizationScreen>
   final StoreManagementService _storeService = StoreManagementService();
   final AuthService _authService = AuthService();
   final ImagePicker _imagePicker = ImagePicker();
-  
+
   late TabController _tabController;
   final _formKey = GlobalKey<FormState>();
-  
+
   // Form controllers
   final TextEditingController _storeNameController = TextEditingController();
-  final TextEditingController _storeDescriptionController = TextEditingController();
+  final TextEditingController _storeDescriptionController =
+      TextEditingController();
   final TextEditingController _storeMessageController = TextEditingController();
-  final TextEditingController _businessHoursController = TextEditingController();
-  
+  final TextEditingController _businessHoursController =
+      TextEditingController();
+
   bool _isStoreOpen = true;
   bool _isLoading = true;
   bool _isSaving = false;
@@ -69,7 +72,8 @@ class _StoreCustomizationScreenState extends State<StoreCustomizationScreen>
           _storeNameController.text = userData.storeName ?? userData.fullName;
           _storeDescriptionController.text = userData.storeDescription ?? '';
           _storeMessageController.text = userData.storeMessage ?? '';
-          _businessHoursController.text = userData.businessHours ?? 'Mon-Sun 6:00 AM - 6:00 PM';
+          _businessHoursController.text =
+              userData.businessHours ?? 'Mon-Sun 6:00 AM - 6:00 PM';
           _isStoreOpen = userData.isStoreOpen;
           _currentBannerUrl = userData.storeBannerUrl;
           _currentLogoUrl = userData.storeLogoUrl ?? userData.avatarUrl;
@@ -186,13 +190,13 @@ class _StoreCustomizationScreenState extends State<StoreCustomizationScreen>
             backgroundColor: Colors.green,
           ),
         );
-        
+
         // Clear new image data
         setState(() {
           _newBannerData = null;
           _newLogoData = null;
         });
-        
+
         // Reload current info
         _loadCurrentStoreInfo();
       }
@@ -431,8 +435,8 @@ class _StoreCustomizationScreenState extends State<StoreCustomizationScreen>
                   SwitchListTile(
                     title: const Text('Store is Open'),
                     subtitle: Text(
-                      _isStoreOpen 
-                          ? 'Customers can place orders' 
+                      _isStoreOpen
+                          ? 'Customers can place orders'
                           : 'Store is temporarily closed',
                     ),
                     value: _isStoreOpen,
@@ -491,14 +495,14 @@ class _StoreCustomizationScreenState extends State<StoreCustomizationScreen>
               height: 120,
               decoration: BoxDecoration(
                 color: Colors.grey[200],
-                borderRadius: isCircular 
+                borderRadius: isCircular
                     ? BorderRadius.circular(60)
                     : BorderRadius.circular(8),
                 border: Border.all(color: Colors.grey[300]!),
               ),
               child: newImageData != null
                   ? ClipRRect(
-                      borderRadius: isCircular 
+                      borderRadius: isCircular
                           ? BorderRadius.circular(60)
                           : BorderRadius.circular(8),
                       child: Image.memory(
@@ -508,7 +512,7 @@ class _StoreCustomizationScreenState extends State<StoreCustomizationScreen>
                     )
                   : currentImageUrl != null
                       ? ClipRRect(
-                          borderRadius: isCircular 
+                          borderRadius: isCircular
                               ? BorderRadius.circular(60)
                               : BorderRadius.circular(8),
                           child: Image.network(

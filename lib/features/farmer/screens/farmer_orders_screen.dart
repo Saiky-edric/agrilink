@@ -3,10 +3,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
 import '../../../core/models/order_model.dart';
 import '../../../core/services/order_service.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/router/route_names.dart';
+import '../../../shared/widgets/delivery_date_picker.dart';
+import '../../../core/theme/app_theme.dart';
 
 class FarmerOrdersScreen extends StatefulWidget {
   const FarmerOrdersScreen({super.key});
@@ -27,6 +30,7 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen>
   List<OrderModel> _acceptedOrders = [];
   List<OrderModel> _toPackOrders = [];
   List<OrderModel> _toDeliverOrders = [];
+  List<OrderModel> _readyForPickupOrders = [];
   List<OrderModel> _completedOrders = [];
 
   bool _isLoading = true;
@@ -37,7 +41,7 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
     _loadOrders().then((_) async {
       final user = await _authService.getCurrentUserProfile();
       if (user == null) return;
@@ -84,6 +88,9 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen>
       _toDeliverOrders = _allOrders
           .where((order) => order.farmerStatus == FarmerOrderStatus.toDeliver)
           .toList();
+      _readyForPickupOrders = _allOrders
+          .where((order) => order.farmerStatus == FarmerOrderStatus.readyForPickup)
+          .toList();
       _completedOrders = _allOrders
           .where((order) => order.farmerStatus == FarmerOrderStatus.completed)
           .toList();
@@ -126,6 +133,386 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen>
         );
       }
     }
+  }
+
+  Future<void> _updateOrderStatusWithDeliveryInfo(OrderModel order, FarmerOrderStatus newStatus) async {
+    DateTime? selectedDeliveryDate;
+    String deliveryNotes = '';
+    String customTrackingNumber = '';
+    
+    try {
+      // If updating to toDeliver, show delivery scheduling dialog
+      if (newStatus == FarmerOrderStatus.toDeliver) {
+        final result = await _showDeliverySchedulingDialog(order);
+        if (result == null) return; // User cancelled
+        selectedDeliveryDate = result['deliveryDate'];
+        customTrackingNumber = result['trackingNumber'] ?? '';
+      }
+      
+      // If completing order, show delivery notes dialog
+      if (newStatus == FarmerOrderStatus.completed && order.deliveryMethod != 'pickup') {
+        final result = await _showDeliveryNotesDialog(order);
+        if (result == null) return; // User cancelled
+        deliveryNotes = result['notes'] ?? '';
+      }
+      
+      // Update order status with optional tracking info
+      await _orderService.updateOrderStatusWithTracking(
+        orderId: order.id,
+        farmerStatus: newStatus,
+        deliveryDate: selectedDeliveryDate,
+        deliveryNotes: deliveryNotes.isNotEmpty ? deliveryNotes : null,
+        trackingNumber: customTrackingNumber.isNotEmpty ? customTrackingNumber : null,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Order status updated successfully!'),
+            backgroundColor: AppTheme.successGreen,
+          ),
+        );
+      }
+
+      // Reload orders
+      await _loadOrders();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating order: ${e.toString()}'),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>?> _showDeliverySchedulingDialog(OrderModel order) async {
+    DateTime? selectedDeliveryDate;
+    final trackingController = TextEditingController();
+    
+    return await showDialog<Map<String, dynamic>?>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.9,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.indigo.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.local_shipping_rounded,
+                        color: Colors.indigo.shade600,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Schedule Delivery',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            'Order #${order.id.substring(0, 8).toUpperCase()}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                
+                // Delivery Date Picker Button
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: InkWell(
+                    onTap: () async {
+                      final selectedDate = await Navigator.of(context).push<DateTime>(
+                        MaterialPageRoute(
+                          builder: (context) => DeliveryDatePickerScreen(
+                            initialDate: selectedDeliveryDate,
+                            onDateSelected: (date) {
+                              setState(() => selectedDeliveryDate = date);
+                            },
+                            title: 'Select Delivery Date',
+                          ),
+                          fullscreenDialog: true,
+                        ),
+                      );
+                      if (selectedDate != null) {
+                        setState(() => selectedDeliveryDate = selectedDate);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today,
+                            color: selectedDeliveryDate != null 
+                                ? Colors.green.shade600 
+                                : Colors.grey.shade600,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Delivery Date',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  selectedDeliveryDate != null
+                                      ? DateFormat('EEEE, MMM d, yyyy').format(selectedDeliveryDate!)
+                                      : 'Tap to select a date',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: selectedDeliveryDate != null
+                                        ? Colors.green.shade700
+                                        : Colors.grey.shade500,
+                                    fontWeight: selectedDeliveryDate != null
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 16,
+                            color: Colors.grey.shade400,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Custom Tracking Number (Optional)
+                TextField(
+                  controller: trackingController,
+                  decoration: InputDecoration(
+                    labelText: 'Tracking Number (Optional)',
+                    hintText: 'Leave empty for auto-generation',
+                    prefixIcon: Icon(Icons.qr_code_2, color: Colors.grey.shade600),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.green.shade600, width: 2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop(null);
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 3,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop({
+                            'deliveryDate': selectedDeliveryDate,
+                            'trackingNumber': trackingController.text.trim(),
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green.shade600,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          'Continue',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>?> _showDeliveryNotesDialog(OrderModel order) async {
+    final notesController = TextEditingController();
+    
+    return await showDialog<Map<String, dynamic>?>(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.note_alt_outlined,
+                      color: Colors.green.shade600,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Delivery Confirmation',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          'Order #${order.id.substring(0, 8).toUpperCase()}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              
+              TextField(
+                controller: notesController,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  labelText: 'Delivery Notes (Optional)',
+                  hintText: 'e.g., "Left at front door", "Received by neighbor"',
+                  alignLabelWithHint: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.green.shade600, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop({'notes': ''});
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: const Text(
+                        'Skip',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 3,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).pop({
+                          'notes': notesController.text.trim(),
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade600,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'Confirm Delivery',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   String _getStatusDisplayName(FarmerOrderStatus status) {
@@ -450,6 +837,38 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                       decoration: BoxDecoration(
+                        color: Colors.indigo.shade400,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.indigo.withOpacity(0.3),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        '${_toDeliverOrders.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Ready Pickup'),
+                  if (_readyForPickupOrders.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
                         color: Colors.purple.shade400,
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
@@ -460,7 +879,7 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen>
                         ],
                       ),
                       child: Text(
-                        '${_toDeliverOrders.length}',
+                        '${_readyForPickupOrders.length}',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 11,
@@ -536,6 +955,7 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen>
                       _buildOrdersList(_acceptedOrders, 'No accepted orders'),
                       _buildOrdersList(_toPackOrders, 'No orders to pack'),
                       _buildOrdersList(_toDeliverOrders, 'No orders to deliver'),
+                      _buildOrdersList(_readyForPickupOrders, 'No orders ready for pickup'),
                       _buildOrdersList(_completedOrders, 'No completed orders'),
                     ],
                   ),
@@ -998,23 +1418,79 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen>
                   ),
                 ),
               ] else if (order.farmerStatus == FarmerOrderStatus.toPack) ...[
+                // Check delivery method to show correct next status
+                if (order.deliveryMethod == 'pickup') ...[
+                  // Pickup orders: toPack → readyForPickup
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _updateOrderStatus(order, FarmerOrderStatus.readyForPickup),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple.shade600,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                        shadowColor: Colors.purple.withOpacity(0.3),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.store_rounded, size: 20),
+                      label: const Text(
+                        'Mark Ready for Pickup',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  // Delivery orders: toPack → toDeliver (with popup)
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _updateOrderStatusWithDeliveryInfo(order, FarmerOrderStatus.toDeliver),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.indigo.shade600,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                        shadowColor: Colors.indigo.withOpacity(0.3),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.local_shipping_rounded, size: 20),
+                      label: const Text(
+                        'Ready for Delivery',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ] else if (order.farmerStatus == FarmerOrderStatus.toDeliver) ...[
+                // Delivery orders: toDeliver → completed (with popup)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: () => _updateOrderStatus(order, FarmerOrderStatus.toDeliver),
+                    onPressed: () => _updateOrderStatusWithDeliveryInfo(order, FarmerOrderStatus.completed),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.purple.shade600,
+                      backgroundColor: Colors.green.shade600,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       elevation: 0,
-                      shadowColor: Colors.purple.withOpacity(0.3),
+                      shadowColor: Colors.green.withOpacity(0.3),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    icon: const Icon(Icons.done_all_rounded, size: 20),
+                    icon: const Icon(Icons.check_circle_rounded, size: 20),
                     label: const Text(
-                      'Mark as Packed',
+                      'Mark as Delivered',
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
@@ -1022,7 +1498,8 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen>
                     ),
                   ),
                 ),
-              ] else if (order.farmerStatus == FarmerOrderStatus.toDeliver) ...[
+              ] else if (order.farmerStatus == FarmerOrderStatus.readyForPickup) ...[
+                // Pickup orders: readyForPickup → completed
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -1037,9 +1514,9 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen>
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    icon: const Icon(Icons.local_shipping_rounded, size: 20),
+                    icon: const Icon(Icons.check_circle_rounded, size: 20),
                     label: const Text(
-                      'Mark as Delivered',
+                      'Mark as Picked Up',
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
