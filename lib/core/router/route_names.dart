@@ -60,6 +60,14 @@ class RouteNames {
   // Support / AI Chat
   static const String supportChat = '/support-chat';
   
+  // Payout routes (Farmer)
+  static const String farmerWallet = '/farmer/wallet';
+  static const String paymentSettings = '/farmer/payment-settings';
+  static const String requestPayout = '/farmer/request-payout';
+  
+  // Payout routes (Admin)
+  static const String adminPayouts = '/admin/payouts';
+  
   // Profile routes
   static const String profile = '/profile'; // General profile (defaults to buyer)
   static const String buyerProfile = '/buyer/profile';
