@@ -8,6 +8,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/services/admin_service.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/subscription_service.dart';
+import '../../../core/services/order_service.dart';
+import '../../../core/services/payout_service.dart';
 import '../../../core/models/admin_analytics_model.dart';
 import '../../../shared/widgets/loading_widgets.dart';
 import '../../../shared/widgets/admin_chart_widget.dart';
@@ -23,11 +25,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final AdminService _adminService = AdminService();
   final AuthService _authService = AuthService();
   final SubscriptionService _subscriptionService = SubscriptionService();
+  final ScrollController _scrollController = ScrollController();
+  
+  // Global keys for scroll targets
+  final GlobalKey _verificationsKey = GlobalKey();
+  final GlobalKey _reportsKey = GlobalKey();
+  final GlobalKey _paymentsKey = GlobalKey();
+  final GlobalKey _payoutsKey = GlobalKey();
+  final GlobalKey _subscriptionsKey = GlobalKey();
+  
   AdminAnalytics? _analytics;
   List<AdminActivity> _recentActivities = [];
   int _pendingSubscriptionsCount = 0;
   int _pendingVerificationsCount = 0;
   int _unresolvedReportsCount = 0;
+  int _pendingPaymentsCount = 0;
+  int _pendingPayoutsCount = 0;
   bool _isLoading = true;
   String? _error;
 
@@ -35,6 +48,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   void initState() {
     super.initState();
     _loadDashboardData();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToSection(GlobalKey key) {
+    final context = key.currentContext;
+    if (context != null) {
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+        alignment: 0.3, // Position at eye level (center of screen)
+      );
+    }
   }
 
   Future<void> _loadDashboardData() async {
@@ -59,12 +90,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         report.status != 'resolved' && report.status != 'dismissed'
       ).toList();
 
+      // Get pending payment verifications
+      final orderService = OrderService();
+      final pendingPayments = await orderService.getPendingPaymentVerifications();
+
+      // Get pending payout requests
+      final payoutService = PayoutService();
+      final pendingPayouts = await payoutService.getAllPayoutRequests(status: 'pending');
+
       setState(() {
         _analytics = analytics;
         _recentActivities = activities;
         _pendingSubscriptionsCount = pendingSubscriptions.length;
         _pendingVerificationsCount = pendingVerifications.length;
         _unresolvedReportsCount = unresolvedReports.length;
+        _pendingPaymentsCount = pendingPayments.length;
+        _pendingPayoutsCount = pendingPayouts.length;
         _isLoading = false;
       });
     } catch (e) {
@@ -177,6 +218,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return RefreshIndicator(
       onRefresh: _loadDashboardData,
       child: SingleChildScrollView(
+        controller: _scrollController,
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,29 +243,61 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               mainAxisSpacing: AppSpacing.md,
               childAspectRatio: 1.2,
               children: [
-                _buildStatCard(
+                _buildClickableStatCard(
                   'Total Users',
                   _analytics?.totalUsers.toString() ?? '0',
                   Icons.people,
                   AppTheme.primaryGreen,
+                  null, // No scroll target
                 ),
-                _buildStatCard(
+                _buildClickableStatCard(
                   'Premium Users',
                   _analytics?.premiumUsers.toString() ?? '0',
                   Icons.star,
                   Colors.amber.shade700,
+                  null, // No scroll target
                 ),
-                _buildStatCard(
+                _buildClickableStatCard(
                   'Total Revenue',
                   '₱${_analytics?.totalRevenue.toStringAsFixed(2) ?? '0.00'}',
                   Icons.monetization_on,
                   AppTheme.secondaryGreen,
+                  null, // No scroll target
                 ),
-                _buildStatCard(
-                  'Pending Verifications',
+                _buildClickableStatCard(
+                  'Farmer Verifications',
                   _analytics?.pendingVerifications.toString() ?? '0',
-                  Icons.pending_actions,
-                  AppTheme.warningOrange,
+                  Icons.verified_user,
+                  AppTheme.primaryGreen,
+                  _verificationsKey,
+                ),
+                _buildClickableStatCard(
+                  'Content Moderation',
+                  _unresolvedReportsCount.toString(),
+                  Icons.flag,
+                  AppTheme.errorRed,
+                  _reportsKey,
+                ),
+                _buildClickableStatCard(
+                  'Payment Verification',
+                  _pendingPaymentsCount.toString(),
+                  Icons.account_balance_wallet,
+                  Colors.blue.shade600,
+                  _paymentsKey,
+                ),
+                _buildClickableStatCard(
+                  'Payout Requests',
+                  _pendingPayoutsCount.toString(),
+                  Icons.payments,
+                  Colors.green.shade600,
+                  _payoutsKey,
+                ),
+                _buildClickableStatCard(
+                  'Subscriptions',
+                  _pendingSubscriptionsCount.toString(),
+                  Icons.star,
+                  Colors.amber.shade700,
+                  _subscriptionsKey,
                 ),
               ],
             ),
@@ -242,14 +316,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(height: AppSpacing.md),
 
             // Action Cards
-            _buildActionCardWithBadge(
-              context,
-              'Farmer Verifications',
-              'Review and approve farmer applications',
-              Icons.verified_user,
-              AppTheme.primaryGreen,
-              () => context.push('/admin/verifications'),
-              badgeCount: _pendingVerificationsCount,
+            Container(
+              key: _verificationsKey,
+              child: _buildActionCardWithBadge(
+                context,
+                'Farmer Verifications',
+                'Review and approve farmer applications',
+                Icons.verified_user,
+                AppTheme.primaryGreen,
+                () => context.push('/admin/verifications'),
+                badgeCount: _pendingVerificationsCount,
+              ),
             ),
 
             const SizedBox(height: AppSpacing.md),
@@ -276,26 +353,62 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
             const SizedBox(height: AppSpacing.md),
 
-            _buildActionCardWithBadge(
-              context,
-              'Content Moderation',
-              'Review flagged content and reports',
-              Icons.flag,
-              AppTheme.errorRed,
-              () => context.push('/admin/reports'),
-              badgeCount: _unresolvedReportsCount,
+            Container(
+              key: _reportsKey,
+              child: _buildActionCardWithBadge(
+                context,
+                'Content Moderation',
+                'Review flagged content and reports',
+                Icons.flag,
+                AppTheme.errorRed,
+                () => context.push('/admin/reports'),
+                badgeCount: _unresolvedReportsCount,
+              ),
             ),
 
             const SizedBox(height: AppSpacing.md),
 
-            _buildActionCardWithBadge(
-              context,
-              'Subscription Management',
-              'Manage premium subscriptions and requests',
-              Icons.star,
-              Colors.amber.shade700,
-              () => context.push('/admin/subscriptions'),
-              badgeCount: _pendingSubscriptionsCount,
+            Container(
+              key: _subscriptionsKey,
+              child: _buildActionCardWithBadge(
+                context,
+                'Subscription Management',
+                'Manage premium subscriptions and requests',
+                Icons.star,
+                Colors.amber.shade700,
+                () => context.push('/admin/subscriptions'),
+                badgeCount: _pendingSubscriptionsCount,
+              ),
+            ),
+
+            const SizedBox(height: AppSpacing.md),
+
+            Container(
+              key: _paymentsKey,
+              child: _buildActionCardWithBadge(
+                context,
+                'Payment Verification',
+                'Verify GCash payment proofs from buyers',
+                Icons.account_balance_wallet,
+                Colors.blue.shade600,
+                () => context.push('/admin/payment-verification'),
+                badgeCount: _pendingPaymentsCount,
+              ),
+            ),
+
+            const SizedBox(height: AppSpacing.md),
+
+            Container(
+              key: _payoutsKey,
+              child: _buildActionCardWithBadge(
+                context,
+                'Payout Management',
+                'Process farmer payout requests',
+                Icons.payments,
+                Colors.green.shade600,
+                () => context.push('/admin/payouts'),
+                badgeCount: _pendingPayoutsCount,
+              ),
             ),
 
             const SizedBox(height: AppSpacing.xl),
@@ -400,57 +513,63 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildStatCard(
+  Widget _buildClickableStatCard(
     String title,
     String value,
     IconData icon,
     Color color,
+    GlobalKey? scrollTarget,
   ) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.cardWhite,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(icon, size: 32, color: color),
-          const SizedBox(height: AppSpacing.sm),
-          Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                value,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: color,
+    return InkWell(
+      onTap: scrollTarget != null ? () => _scrollToSection(scrollTarget) : null,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.cardWhite,
+          borderRadius: BorderRadius.circular(12),
+          border: scrollTarget != null ? Border.all(color: color.withOpacity(0.3), width: 1) : null,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(icon, size: 32, color: color),
+            const SizedBox(height: AppSpacing.sm),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                maxLines: 1,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Flexible(
+              child: Text(
+                title,
+                style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                textAlign: TextAlign.center,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Flexible(
-            child: Text(
-              title,
-              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

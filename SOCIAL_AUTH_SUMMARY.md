@@ -2,7 +2,7 @@
 
 ## 🎉 What I've Done For You
 
-I've prepared everything you need to enable Google and Facebook authentication in your Agrilink app!
+I've prepared everything you need to enable Google authentication in your Agrilink app!
 
 ---
 
@@ -11,54 +11,55 @@ I've prepared everything you need to enable Google and Facebook authentication i
 ### ✅ Created Files:
 1. **`ENABLE_SOCIAL_AUTH_GUIDE.md`** - Complete step-by-step guide (detailed)
 2. **`SOCIAL_AUTH_QUICK_START.md`** - Fast 5-minute setup guide
-3. **`CREDENTIALS_TEMPLATE.txt`** - Organize your OAuth credentials
-4. **`android/app/src/main/res/values/strings.xml`** - Facebook configuration file
+3. **`SOCIAL_AUTH_UPDATE_2026.md`** - Latest changes and migration notes
+4. **`CREDENTIALS_TEMPLATE.txt`** - Organize your OAuth credentials
 
 ### ✅ Modified Files:
-1. **`android/app/src/main/AndroidManifest.xml`** - Added Facebook SDK configuration
+1. **`pubspec.yaml`** - Removed Facebook auth dependency
+2. **`lib/core/services/auth_service.dart`** - Removed Facebook sign-in
+3. **`lib/features/auth/screens/login_screen.dart`** - Updated to Google-only
+4. **`lib/shared/widgets/social_sign_in_button.dart`** - Wide button design
 
 ---
 
 ## 🎨 What's Already in Your App
 
-Your app **already has social authentication implemented**! Here's what's ready:
+Your app **already has Google authentication implemented**! Here's what's ready:
 
 ### ✅ UI Components
-- **Google sign-in button** (white circular icon) on login screen
-- **Facebook sign-in button** (blue circular icon) on login screen
-- Both buttons show loading spinners during authentication
+- **Google sign-in button** (wide, full-width button) on login screen
+- Modern Material Design styling with Google branding
+- Loading spinner during authentication
 - Error handling with user-friendly messages
 
 ### ✅ Backend Services
 - **`AuthService.signInWithGoogle()`** - Full Google OAuth implementation
-- **`AuthService.signInWithFacebook()`** - Complete Facebook authentication
 - Automatic profile creation in database
-- Role selection flow for new social users
+- Role selection flow for new Google users
 
 ### ✅ User Flow
-1. User taps Google/Facebook button → Authenticates
+1. User taps Google button → Authenticates
 2. New user? → **Role Selection Screen** (choose buyer/farmer)
 3. Complete profile → **Address Setup Screen**
 4. Redirected to appropriate dashboard ✅
 
 ### ✅ Android Configuration
-- Facebook SDK metadata added to manifest
-- Facebook activities configured
-- Strings resource file created for Facebook credentials
+- Google Sign-In package configured
+- OAuth flow properly implemented
+- No additional Android configuration needed
 
 ---
 
 ## 🚀 What You Need To Do
 
-You just need to add your **OAuth credentials** from Google and Facebook. It takes about 5 minutes!
+You just need to add your **Google OAuth credentials**. It takes about 5 minutes!
 
 ### Quick Checklist:
 ```
-[ ] Step 1: Get Google OAuth credentials (2 min)
-[ ] Step 2: Get Facebook App credentials (2 min)  
-[ ] Step 3: Configure Supabase providers (1 min)
-[ ] Step 4: Update app config files (30 sec)
-[ ] Step 5: Test it! (1 min)
+[ ] Step 1: Get Google OAuth credentials (3 min)
+[ ] Step 2: Configure Supabase Google provider (1 min)
+[ ] Step 3: Update app config files (30 sec)
+[ ] Step 4: Test it! (1 min)
 ```
 
 ---
@@ -94,16 +95,9 @@ You just need to add your **OAuth credentials** from Google and Facebook. It tak
 - ✅ Android Client ID
 - ✅ SHA-1 fingerprint
 
-### From Facebook Developers:
-- ✅ App ID
-- ✅ App Secret
-- ✅ Client Token
-- ✅ Android Key Hash
-
 ### Configuration Locations:
-1. **Supabase Dashboard** → Authentication → Providers
-2. **`android/app/src/main/res/values/strings.xml`** → Facebook credentials
-3. **`lib/core/config/environment.dart`** → Google Client IDs (lines 67 & 74)
+1. **Supabase Dashboard** → Authentication → Providers (Enable Google)
+2. **`lib/core/config/environment.dart`** → Google Client IDs
 
 ---
 
@@ -121,47 +115,35 @@ Once configured, your login screen will have:
 │                             │
 │  ──── OR CONTINUE WITH ──── │
 │                             │
-│   [Google] [Facebook]       │  ← These work after setup!
+│  [Continue with Google]     │  ← This works after setup!
 │                             │
 │  Don't have account? Sign Up│
 └─────────────────────────────┘
 ```
 
 ### User Experience:
-- **Tap Google icon** → Authenticate with Google → Choose role → Complete address → Dashboard ✅
-- **Tap Facebook icon** → Authenticate with Facebook → Choose role → Complete address → Dashboard ✅
+- **Tap Google button** → Authenticate with Google → Choose role → Complete address → Dashboard ✅
 
 ---
 
 ## 📱 How It Looks in Code
 
 ### Login Screen (lib/features/auth/screens/login_screen.dart)
-Lines 280-375 contain the social sign-in buttons:
+The login screen now features a wide Google sign-in button:
 
-**Google Button (lines 282-322):**
-- White circular button with Google logo
-- Shows spinner while authenticating
+**Google Button:**
+- Full-width white button with Google branding
+- Text: "Continue with Google"
+- Shows loading spinner while authenticating
 - Calls `_handleGoogleSignIn()` method
 
-**Facebook Button (lines 328-374):**
-- Blue circular button with Facebook logo  
-- Shows spinner while authenticating
-- Calls `_handleFacebookSignIn()` method
-
 ### Auth Service (lib/core/services/auth_service.dart)
-**`signInWithGoogle()` - Lines 107-202:**
+**`signInWithGoogle()`:**
 - Gets Google credentials from environment config
 - Uses `google_sign_in` package
 - Sends tokens to Supabase
 - Creates user profile if new user
 - Returns null for role selection if needed
-
-**`signInWithFacebook()` - Lines 205-266:**
-- Uses `flutter_facebook_auth` package
-- Gets Facebook access token
-- Authenticates with Supabase
-- Creates user profile if needed
-- Handles role selection flow
 
 ---
 
@@ -184,8 +166,6 @@ Already implemented:
 ### "Unacceptable audience in id_token"
 → Add Web Client ID to Supabase Authorized Client IDs
 
-### "Invalid Key Hash" (Facebook)
-→ Regenerate key hash and add to Facebook App settings
 
 ### Social buttons not visible
 → They're at lines 280-375 in login_screen.dart (already there!)

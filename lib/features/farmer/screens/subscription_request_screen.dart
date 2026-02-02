@@ -86,7 +86,7 @@ class _SubscriptionRequestScreenState extends State<SubscriptionRequestScreen> {
       // Upload payment proof
       String? proofUrl;
       if (_paymentProof != null) {
-        proofUrl = await _storageService.uploadPaymentProof(
+        proofUrl = await _storageService.uploadSubscriptionPaymentProof(
           _paymentProof!,
           userId: user.id,
         );

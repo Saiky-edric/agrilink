@@ -88,7 +88,7 @@ class PayoutService {
         .or('farmer_payout_status.is.null,farmer_payout_status.eq.pending,farmer_payout_status.eq.available');
 
     double total = 0.0;
-    const commission = 0.10; // 10% platform commission
+    const commission = 0.00; // No commission - farmers get 100%
 
     for (var order in orders) {
       final amount = (order['total_amount'] as num).toDouble();
@@ -121,7 +121,7 @@ class PayoutService {
         .inFilter('farmer_status', ['newOrder', 'accepted', 'toPack', 'toDeliver', 'readyForPickup']);
 
     double total = 0.0;
-    const commission = 0.10;
+    const commission = 0.00; // No commission - farmers get 100%
 
     for (var order in orders) {
       final amount = (order['total_amount'] as num).toDouble();
@@ -274,13 +274,15 @@ class PayoutService {
           ''')
           .order('created_at', ascending: false);
 
+      final response = await query;
+      
+      // Filter by status if provided (client-side since the query builder doesn't support it directly)
+      List<dynamic> filteredResponse = response as List;
       if (status != null) {
-        query = query.eq('status', status);
+        filteredResponse = filteredResponse.where((item) => item['status'] == status).toList();
       }
 
-      final response = await query;
-
-      final requests = (response as List).map((json) {
+      final requests = filteredResponse.map((json) {
         // Add farmer and admin names
         final farmerData = json['users'] as Map<String, dynamic>?;
         final adminData = json['admins'] as Map<String, dynamic>?;
@@ -304,21 +306,14 @@ class PayoutService {
   /// Get payout statistics for admin dashboard
   Future<Map<String, dynamic>> getPayoutStatistics() async {
     try {
-      // Count by status
-      final pendingCount = await _client
+      // Count by status using count() method
+      final allRequests = await _client
           .from('payout_requests')
-          .select('id', const FetchOptions(count: CountOption.exact, head: true))
-          .eq('status', 'pending');
+          .select('status');
 
-      final processingCount = await _client
-          .from('payout_requests')
-          .select('id', const FetchOptions(count: CountOption.exact, head: true))
-          .eq('status', 'processing');
-
-      final completedCount = await _client
-          .from('payout_requests')
-          .select('id', const FetchOptions(count: CountOption.exact, head: true))
-          .eq('status', 'completed');
+      final pendingCount = (allRequests as List).where((r) => r['status'] == 'pending').length;
+      final processingCount = (allRequests).where((r) => r['status'] == 'processing').length;
+      final completedCount = (allRequests).where((r) => r['status'] == 'completed').length;
 
       // Get total amounts
       final completedPayouts = await _client
@@ -342,9 +337,9 @@ class PayoutService {
       }
 
       return {
-        'pending_count': pendingCount.count ?? 0,
-        'processing_count': processingCount.count ?? 0,
-        'completed_count': completedCount.count ?? 0,
+        'pending_count': pendingCount,
+        'processing_count': processingCount,
+        'completed_count': completedCount,
         'total_paid_out': totalPaidOut,
         'total_pending': totalPending,
       };

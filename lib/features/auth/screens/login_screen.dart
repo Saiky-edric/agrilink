@@ -25,7 +25,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   bool _isGoogleLoading = false;
-  bool _isFacebookLoading = false;
 
   @override
   void dispose() {
@@ -115,34 +114,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _handleFacebookSignIn() async {
-    setState(() => _isFacebookLoading = true);
-
-    try {
-      final user = await _authService.signInWithFacebook();
-
-      if (mounted) {
-        if (user == null) {
-          // New user needs role selection
-          context.go(RouteNames.socialRoleSelection);
-        } else {
-          // Existing user with role
-          _navigateBasedOnRole(user);
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Facebook sign-in failed: ${e.toString()}'),
-            backgroundColor: AppTheme.errorRed,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isFacebookLoading = false);
-    }
-  }
 
   void _navigateBasedOnRole(UserModel user) {
     // Check if user has completed address setup
@@ -267,113 +238,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
 
-                const SizedBox(height: AppSpacing.lg),
+                const SizedBox(height: AppSpacing.md),
 
-                // Social Authentication Icons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Google Icon
-                    GestureDetector(
-                      onTap: _isGoogleLoading ? null : _handleGoogleSignIn,
-                      child: Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(color: Colors.grey.shade300, width: 1),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: _isGoogleLoading
-                            ? const Center(
-                                child: SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryGreen),
-                                  ),
-                                ),
-                              )
-                            : Center(
-                                child: Image.asset(
-                                  'assets/images/logos/google_logo.png',
-                                  width: 32,
-                                  height: 32,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    // Fallback to custom painted logo if image fails
-                                    return SizedBox(
-                                      width: 32,
-                                      height: 32,
-                                      child: CustomPaint(
-                                        painter: GoogleLogoPainter(),
-                                        size: const Size(32, 32),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                      ),
-                    ),
-                    
-                    const SizedBox(width: 24),
-                    
-                    // Facebook Icon
-                    GestureDetector(
-                      onTap: _isFacebookLoading ? null : _handleFacebookSignIn,
-                      child: Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1877F2),
-                          borderRadius: BorderRadius.circular(28),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: _isFacebookLoading
-                            ? const Center(
-                                child: SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                  ),
-                                ),
-                              )
-                            : Center(
-                                child: Image.asset(
-                                  'assets/images/logos/facebook_logo.png',
-                                  width: 32,
-                                  height: 32,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    // Fallback to custom painted logo if image fails
-                                    return SizedBox(
-                                      width: 32,
-                                      height: 32,
-                                      child: CustomPaint(
-                                        painter: FacebookLogoPainter(),
-                                        size: const Size(32, 32),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                      ),
-                    ),
-                  ],
+                // Google Sign In Button - Wide Style
+                SocialSignInButton(
+                  provider: SocialProvider.google,
+                  onPressed: _handleGoogleSignIn,
+                  isLoading: _isGoogleLoading,
                 ),
 
                 const SizedBox(height: AppSpacing.xl),

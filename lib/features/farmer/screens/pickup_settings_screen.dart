@@ -3,8 +3,11 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../core/services/location_service.dart';
+import '../../../core/services/geocoding_service.dart';
 import '../../../core/constants/location_data.dart';
 import '../../../core/models/user_model.dart';
+import '../../../shared/widgets/map_location_picker.dart';
 
 class PickupSettingsScreen extends StatefulWidget {
   const PickupSettingsScreen({super.key});
@@ -16,10 +19,14 @@ class PickupSettingsScreen extends StatefulWidget {
 class _PickupSettingsScreenState extends State<PickupSettingsScreen> {
   final AuthService _authService = AuthService();
   final SupabaseService _supabase = SupabaseService.instance;
+  final LocationService _locationService = LocationService();
+  final GeocodingService _geocodingService = GeocodingService();
   
   bool _isLoading = true;
   bool _isSaving = false;
   bool _pickupEnabled = false;
+  bool _isGettingLocation = false;
+  bool _isDetectingAddress = false;
   
   // Pickup addresses management
   List<Map<String, dynamic>> _pickupAddresses = [];
@@ -29,6 +36,9 @@ class _PickupSettingsScreenState extends State<PickupSettingsScreen> {
   String? _selectedMunicipality;
   String? _selectedBarangay;
   List<String> _availableBarangays = [];
+  
+  // GPS coordinates for current address
+  LocationCoordinates? _currentCoordinates;
   
   final TextEditingController _streetAddressController = TextEditingController();
   final TextEditingController _instructionsController = TextEditingController();
@@ -158,6 +168,19 @@ class _PickupSettingsScreenState extends State<PickupSettingsScreen> {
       _selectedBarangay = address['barangay'] as String?;
       _streetAddressController.text = address['street_address'] as String? ?? '';
       _addressLabelController.text = address['label'] as String? ?? 'Address ${_selectedAddressIndex + 1}';
+      
+      // Load GPS coordinates if available
+      final lat = address['latitude'];
+      final lng = address['longitude'];
+      if (lat != null && lng != null) {
+        _currentCoordinates = LocationCoordinates(
+          latitude: lat is int ? lat.toDouble() : lat as double,
+          longitude: lng is int ? lng.toDouble() : lng as double,
+          accuracy: address['accuracy'] as double?,
+        );
+      } else {
+        _currentCoordinates = null;
+      }
       
       // Update available barangays
       if (_selectedMunicipality != null) {
@@ -290,7 +313,209 @@ class _PickupSettingsScreenState extends State<PickupSettingsScreen> {
       'barangay': _selectedBarangay,
       'street_address': _streetAddressController.text.trim(),
       'is_default': _pickupAddresses[_selectedAddressIndex]['is_default'] ?? false,
+      'latitude': _currentCoordinates?.latitude,
+      'longitude': _currentCoordinates?.longitude,
+      'accuracy': _currentCoordinates?.accuracy,
     };
+  }
+
+  Future<void> _getCurrentLocation() async {
+    setState(() => _isGettingLocation = true);
+
+    try {
+      final coordinates = await _locationService.getCurrentLocation();
+      
+      if (coordinates == null) {
+        if (mounted) {
+          _showErrorSnackBar('Could not get location. Please check your location settings.');
+        }
+        setState(() => _isGettingLocation = false);
+        return;
+      }
+
+      // Check if within Agusan del Sur
+      if (!_locationService.isWithinAgusanDelSur(
+        coordinates.latitude,
+        coordinates.longitude,
+      )) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location is outside Agusan del Sur. You can still save it.'),
+              backgroundColor: AppTheme.warningOrange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+
+      setState(() {
+        _currentCoordinates = coordinates;
+        _isGettingLocation = false;
+      });
+
+      // Auto-detect and fill address from GPS
+      await _autoFillAddressFromGPS(coordinates);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Location captured! (Accuracy: ${coordinates.accuracy?.round() ?? 'N/A'}m)',
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppTheme.successGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorSnackBar('Error getting location: $e');
+      }
+      setState(() => _isGettingLocation = false);
+    }
+  }
+
+  Future<void> _autoFillAddressFromGPS(LocationCoordinates coordinates) async {
+    setState(() => _isDetectingAddress = true);
+
+    try {
+      final address = await _geocodingService.getAddressFromCoordinates(
+        latitude: coordinates.latitude,
+        longitude: coordinates.longitude,
+      );
+
+      if (address == null) {
+        setState(() => _isDetectingAddress = false);
+        return;
+      }
+
+      // Try to match detected municipality with our list
+      final detectedMunicipality = address.municipality;
+      final matchingMunicipality = LocationData.municipalities.firstWhere(
+        (m) => m.toLowerCase().contains(detectedMunicipality.toLowerCase()) ||
+               detectedMunicipality.toLowerCase().contains(m.toLowerCase()),
+        orElse: () => '',
+      );
+
+      // Auto-fill fields
+      if (matchingMunicipality.isNotEmpty) {
+        setState(() {
+          _selectedMunicipality = matchingMunicipality;
+          _availableBarangays = LocationData.municipalityBarangays[matchingMunicipality] ?? [];
+        });
+
+        // Try to match barangay
+        final detectedBarangay = address.barangay;
+        if (detectedBarangay.isNotEmpty) {
+          final matchingBarangay = _availableBarangays.firstWhere(
+            (b) => b.toLowerCase().contains(detectedBarangay.toLowerCase()) ||
+                   detectedBarangay.toLowerCase().contains(b.toLowerCase()),
+            orElse: () => '',
+          );
+          
+          if (matchingBarangay.isNotEmpty) {
+            setState(() {
+              _selectedBarangay = matchingBarangay;
+            });
+          }
+        }
+      }
+
+      // Auto-fill street if available
+      if (address.street.isNotEmpty && _streetAddressController.text.isEmpty) {
+        _streetAddressController.text = address.street;
+      }
+
+      setState(() => _isDetectingAddress = false);
+
+      // Show success message
+      if (mounted) {
+        final detectedInfo = <String>[];
+        if (matchingMunicipality.isNotEmpty) detectedInfo.add(matchingMunicipality);
+        if (_selectedBarangay != null) detectedInfo.add(_selectedBarangay!);
+        if (address.street.isNotEmpty) detectedInfo.add(address.street);
+
+        if (detectedInfo.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Text('Address Auto-Filled!', style: TextStyle(fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    detectedInfo.join(', '),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ],
+              ),
+              backgroundColor: AppTheme.primaryGreen,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error detecting address: $e');
+      setState(() => _isDetectingAddress = false);
+    }
+  }
+
+  Future<void> _openMapPicker() async {
+    final result = await Navigator.push<dynamic>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MapLocationPicker(
+          initialLatitude: _currentCoordinates?.latitude,
+          initialLongitude: _currentCoordinates?.longitude,
+          onLocationSelected: (lat, lng) {},
+        ),
+      ),
+    );
+
+    if (result != null && result is dynamic) {
+      final coordinates = LocationCoordinates(
+        latitude: result.latitude as double,
+        longitude: result.longitude as double,
+      );
+
+      setState(() {
+        _currentCoordinates = coordinates;
+      });
+
+      // Auto-detect and fill address
+      await _autoFillAddressFromGPS(coordinates);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Expanded(child: Text('Location selected from map!')),
+              ],
+            ),
+            backgroundColor: AppTheme.successGreen,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _selectTime(BuildContext context, bool isOpening) async {
@@ -315,6 +540,63 @@ class _PickupSettingsScreenState extends State<PickupSettingsScreen> {
       SnackBar(
         content: Text(message),
         backgroundColor: AppTheme.errorRed,
+      ),
+    );
+  }
+
+  Widget _buildLocationButton({
+    IconData? icon,
+    required String label,
+    required VoidCallback onTap,
+    required Color color,
+    bool isLoading = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: isLoading ? null : onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: color.withOpacity(0.3),
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isLoading)
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(color),
+                  ),
+                )
+              else if (icon != null)
+                Icon(icon, size: 18, color: color),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -631,6 +913,112 @@ class _PickupSettingsScreenState extends State<PickupSettingsScreen> {
                         ),
                         maxLines: 2,
                       ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Map Preview (if coordinates available)
+                      if (_currentCoordinates != null)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Location Preview',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            MapPreview(
+                              latitude: _currentCoordinates?.latitude,
+                              longitude: _currentCoordinates?.longitude,
+                              height: 180,
+                              onTap: _openMapPicker,
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
+                      
+                      // Location Action Buttons
+                      Row(
+                        children: [
+                          // Use My Location Button
+                          Expanded(
+                            child: _buildLocationButton(
+                              icon: _isGettingLocation
+                                  ? null
+                                  : (_currentCoordinates != null
+                                      ? Icons.my_location
+                                      : Icons.gps_fixed),
+                              label: _currentCoordinates != null
+                                  ? 'Update GPS'
+                                  : 'Use My Location',
+                              isLoading: _isGettingLocation,
+                              onTap: _getCurrentLocation,
+                              color: AppTheme.primaryGreen,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // Pick on Map Button
+                          Expanded(
+                            child: _buildLocationButton(
+                              icon: Icons.map_outlined,
+                              label: 'Pick on Map',
+                              onTap: _openMapPicker,
+                              color: AppTheme.accentGreen,
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      // Coordinates Display (if available)
+                      if (_currentCoordinates != null) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppTheme.successGreen.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: AppTheme.successGreen.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.check_circle,
+                                color: AppTheme.successGreen,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Location Captured ✓',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                        color: AppTheme.successGreen,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'GPS: ${_currentCoordinates!.latitude.toStringAsFixed(6)}, ${_currentCoordinates!.longitude.toStringAsFixed(6)}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       
                       // Remove address button (only if more than 1 address)
                       if (_pickupAddresses.length > 1) ...[

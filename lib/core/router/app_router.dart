@@ -67,6 +67,16 @@ import '../../features/farmer/screens/subscription_screen.dart';
 import '../../features/farmer/screens/subscription_request_screen.dart';
 import '../../features/admin/screens/admin_subscription_management_screen.dart';
 import '../../features/admin/screens/admin_activities_screen.dart';
+import '../../features/buyer/screens/upload_payment_proof_screen.dart';
+import '../../features/farmer/screens/farmer_wallet_screen.dart';
+import '../../features/farmer/screens/payment_settings_screen.dart';
+import '../../features/farmer/screens/request_payout_screen.dart';
+import '../../features/admin/screens/admin_payout_dashboard_screen.dart';
+import '../../features/admin/screens/admin_payment_verification_screen.dart';
+import '../../features/admin/screens/admin_refund_management_screen.dart';
+import '../../features/buyer/screens/transaction_history_screen.dart';
+import '../../features/buyer/screens/payment_history_screen.dart';
+import '../../core/models/payout_request_model.dart';
 import 'profile_router_helper.dart';
 
 class AppRouter {
@@ -212,6 +222,19 @@ class AppRouter {
             farmerId: extra?['farmerId'],
             items: extra?['items'],
             storeInfo: extra?['storeInfo'],
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.uploadPaymentProof,
+        name: 'uploadPaymentProof',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>;
+          final orderIds = extra['orderIds'] as List<String>;
+          final totalAmount = extra['totalAmount'] as double;
+          return UploadPaymentProofScreen(
+            orderIds: orderIds,
+            totalAmount: totalAmount,
           );
         },
       ),
@@ -495,6 +518,69 @@ class AppRouter {
         path: RouteNames.exportCenter,
         name: 'exportCenter',
         builder: (context, state) => const UnderDevelopmentScreen(featureName: 'Export Center'),
+      ),
+
+      // Payout & Payment Verification routes
+      GoRoute(
+        path: RouteNames.farmerWallet,
+        name: 'farmerWallet',
+        builder: (context, state) => const FarmerWalletScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.paymentSettings,
+        name: 'paymentSettings',
+        builder: (context, state) => const PaymentSettingsScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.requestPayout,
+        name: 'requestPayout',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final walletSummary = extra?['walletSummary'] as FarmerWalletSummary?;
+          
+          // If no wallet summary provided, create a default one
+          return RequestPayoutScreen(
+            walletSummary: walletSummary ?? const FarmerWalletSummary(
+              farmerId: '',
+              farmerName: 'Farmer',
+              availableBalance: 0,
+              pendingEarnings: 0,
+              totalPaidOut: 0,
+              pendingRequestsCount: 0,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.adminPaymentVerification,
+        name: 'adminPaymentVerification',
+        builder: (context, state) => const AdminPaymentVerificationScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.adminPayouts,
+        name: 'adminPayouts',
+        builder: (context, state) => const AdminPayoutDashboardScreen(),
+      ),
+
+      // Admin Refund Management
+      GoRoute(
+        path: RouteNames.adminRefundManagement,
+        name: 'adminRefundManagement',
+        builder: (context, state) => const AdminRefundManagementScreen(),
+      ),
+
+      // Transaction History
+      GoRoute(
+        path: RouteNames.transactionHistory,
+        name: 'transactionHistory',
+        builder: (context, state) => const TransactionHistoryScreen(),
+      ),
+
+      // Payment History
+      GoRoute(
+        path: RouteNames.paymentHistory,
+        name: 'paymentHistory',
+        builder: (context, state) => const PaymentHistoryScreen(),
       ),
 
       // Subscription routes

@@ -35,6 +35,18 @@ class OrderModel extends Equatable {
   // Review tracking
   final bool buyerReviewed;
   final bool reviewReminderSent;
+  // Payment proof fields (for GCash)
+  final String? paymentScreenshotUrl;
+  final String? paymentReference;
+  final bool? paymentVerified;
+  final DateTime? paymentVerifiedAt;
+  final String? paymentVerifiedBy;
+  final String? paymentNotes;
+  // Refund fields
+  final bool refundRequested;
+  final String? refundStatus;
+  final DateTime? refundedAt;
+  final double? refundedAmount;
 
   const OrderModel({
     required this.id,
@@ -63,6 +75,16 @@ class OrderModel extends Equatable {
     this.paymentMethod,
     this.buyerReviewed = false,
     this.reviewReminderSent = false,
+    this.paymentScreenshotUrl,
+    this.paymentReference,
+    this.paymentVerified,
+    this.paymentVerifiedAt,
+    this.paymentVerifiedBy,
+    this.paymentNotes,
+    this.refundRequested = false,
+    this.refundStatus,
+    this.refundedAt,
+    this.refundedAmount,
   });
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
@@ -96,6 +118,18 @@ class OrderModel extends Equatable {
       paymentMethod: json['payment_method'] as String?,
       buyerReviewed: (json['buyer_reviewed'] as bool?) ?? false,
       reviewReminderSent: (json['review_reminder_sent'] as bool?) ?? false,
+      paymentScreenshotUrl: json['payment_screenshot_url'] as String?,
+      paymentReference: json['payment_reference'] as String?,
+      paymentVerified: json['payment_verified'] as bool?,
+      paymentVerifiedAt: json['payment_verified_at'] != null 
+          ? DateTime.parse(json['payment_verified_at']) 
+          : null,
+      paymentVerifiedBy: json['payment_verified_by'] as String?,
+      paymentNotes: json['payment_notes'] as String?,
+      refundRequested: (json['refund_requested'] as bool?) ?? false,
+      refundStatus: json['refund_status'] as String?,
+      refundedAt: json['refunded_at'] != null ? DateTime.parse(json['refunded_at']) : null,
+      refundedAmount: (json['refunded_amount'] as num?)?.toDouble(),
       buyerProfile: json['buyer'] != null ? UserModel.fromJson(json['buyer']) : null,
       farmerProfile: json['farmer'] != null ? UserModel.fromJson(json['farmer']) : null,
       items: (json['items'] ?? json['order_items']) != null
@@ -125,6 +159,16 @@ class OrderModel extends Equatable {
       'payment_method': paymentMethod,
       'buyer_reviewed': buyerReviewed,
       'review_reminder_sent': reviewReminderSent,
+      'payment_screenshot_url': paymentScreenshotUrl,
+      'payment_reference': paymentReference,
+      'payment_verified': paymentVerified,
+      'payment_verified_at': paymentVerifiedAt?.toIso8601String(),
+      'payment_verified_by': paymentVerifiedBy,
+      'payment_notes': paymentNotes,
+      'refund_requested': refundRequested,
+      'refund_status': refundStatus,
+      'refunded_at': refundedAt?.toIso8601String(),
+      'refunded_amount': refundedAmount,
     };
   }
 
@@ -150,6 +194,16 @@ class OrderModel extends Equatable {
     String? paymentMethod,
     bool? buyerReviewed,
     bool? reviewReminderSent,
+    String? paymentScreenshotUrl,
+    String? paymentReference,
+    bool? paymentVerified,
+    DateTime? paymentVerifiedAt,
+    String? paymentVerifiedBy,
+    String? paymentNotes,
+    bool? refundRequested,
+    String? refundStatus,
+    DateTime? refundedAt,
+    double? refundedAmount,
   }) {
     return OrderModel(
       id: id ?? this.id,
@@ -175,6 +229,16 @@ class OrderModel extends Equatable {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       buyerReviewed: buyerReviewed ?? this.buyerReviewed,
       reviewReminderSent: reviewReminderSent ?? this.reviewReminderSent,
+      paymentScreenshotUrl: paymentScreenshotUrl ?? this.paymentScreenshotUrl,
+      paymentReference: paymentReference ?? this.paymentReference,
+      paymentVerified: paymentVerified ?? this.paymentVerified,
+      paymentVerifiedAt: paymentVerifiedAt ?? this.paymentVerifiedAt,
+      paymentVerifiedBy: paymentVerifiedBy ?? this.paymentVerifiedBy,
+      paymentNotes: paymentNotes ?? this.paymentNotes,
+      refundRequested: refundRequested ?? this.refundRequested,
+      refundStatus: refundStatus ?? this.refundStatus,
+      refundedAt: refundedAt ?? this.refundedAt,
+      refundedAmount: refundedAmount ?? this.refundedAmount,
     );
   }
 
@@ -238,6 +302,16 @@ class OrderModel extends Equatable {
         paymentMethod,
         buyerReviewed,
         reviewReminderSent,
+        paymentScreenshotUrl,
+        paymentReference,
+        paymentVerified,
+        paymentVerifiedAt,
+        paymentVerifiedBy,
+        paymentNotes,
+        refundRequested,
+        refundStatus,
+        refundedAt,
+        refundedAmount,
       ];
 }
 

@@ -351,8 +351,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       if (mounted) {
         if (_paymentMethod == 'gcash') {
-          // Handle GCash payment - temporarily disabled until service is properly implemented
-          _showSuccessAndNavigate('Order placed successfully! GCash payment will be available soon.');
+          // Navigate to payment proof upload screen
+          _navigateToPaymentProof(orderIds);
         } else if (_deliveryMethod == 'pickup') {
           // Cash on Pickup - show success
           _showSuccessAndNavigate('Order placed successfully! You will pay when you pick up your order.');
@@ -370,6 +370,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         setState(() => _isPlacingOrder = false);
       }
     }
+  }
+
+  void _navigateToPaymentProof(List<String> orderIds) {
+    // Navigate to payment proof upload screen
+    context.push(
+      '/buyer/upload-payment-proof',
+      extra: {
+        'orderIds': orderIds,
+        'totalAmount': _total,
+      },
+    );
   }
 
   void _showErrorSnackBar(String message) {
@@ -608,6 +619,240 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     context.push('${RouteNames.publicFarmerProfile}/$farmerId');
   }
 
+  Widget _buildGCashInstructions() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.blue.shade200, width: 1.5),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.blue.shade50,
+              Colors.white,
+            ],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.account_balance_wallet,
+                      color: Colors.blue.shade700,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'GCash Payment Instructions',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.blue.shade900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              
+              // Payment breakdown
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.shade100),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Subtotal (${_cart.totalItems} item${_cart.totalItems == 1 ? '' : 's'}):',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        Text(
+                          '₱${_subtotal.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_deliveryFee > 0) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Delivery Fee:',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          Text(
+                            '₱${_deliveryFee.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey.shade800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Divider(height: 1, color: Colors.grey.shade300),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Total Amount to Pay:',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                        Text(
+                          '₱${_total.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.blue.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Instructions
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.amber.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Next Steps:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.amber.shade900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildInstructionStep('1', 'Click "Place Order" to create your order'),
+                    const SizedBox(height: 8),
+                    _buildInstructionStep('2', 'You\'ll see AgriLink\'s GCash details'),
+                    const SizedBox(height: 8),
+                    _buildInstructionStep('3', 'Send payment via GCash app'),
+                    const SizedBox(height: 8),
+                    _buildInstructionStep('4', 'Upload payment screenshot and reference number'),
+                    const SizedBox(height: 8),
+                    _buildInstructionStep('5', 'Wait for payment verification'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              
+              // Warning
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade600, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Your order will be processed after payment verification',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.orange.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInstructionStep(String number, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: Colors.blue.shade700,
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              number,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey.shade800,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -711,6 +956,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       setState(() => _paymentMethod = method);
                     },
                   ),
+                  
+                  // GCash Payment Instructions (show when GCash is selected)
+                  if (_paymentMethod == 'gcash') ...[
+                    const SizedBox(height: 16),
+                    _buildGCashInstructions(),
+                  ],
                   const SizedBox(height: 16),
                   
                   // Special Instructions Section

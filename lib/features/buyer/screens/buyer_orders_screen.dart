@@ -24,6 +24,7 @@ class _BuyerOrdersScreenState extends State<BuyerOrdersScreen> with SingleTicker
   late TabController _tabController;
   
   List<OrderModel> _activeOrders = [];
+  List<OrderModel> _pendingPaymentOrders = [];
   List<OrderModel> _completedOrders = [];
   bool _isLoading = true;
   bool _isCancelling = false;
@@ -45,7 +46,7 @@ class _BuyerOrdersScreenState extends State<BuyerOrdersScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadOrders();
   }
 
@@ -71,10 +72,21 @@ class _BuyerOrdersScreenState extends State<BuyerOrdersScreen> with SingleTicker
       final orders = response.map((json) => OrderModel.fromJson(json)).toList();
       
       setState(() {
-        _activeOrders = orders.where((order) => 
-          order.farmerStatus != FarmerOrderStatus.completed && 
+        // Pending payment: GCash orders with unverified payment
+        _pendingPaymentOrders = orders.where((order) => 
+          order.paymentMethod?.toLowerCase() == 'gcash' &&
+          order.paymentVerified != true &&
           order.farmerStatus != FarmerOrderStatus.cancelled
         ).toList();
+        
+        // Active orders: verified or non-GCash orders that are not completed/cancelled
+        _activeOrders = orders.where((order) => 
+          order.farmerStatus != FarmerOrderStatus.completed && 
+          order.farmerStatus != FarmerOrderStatus.cancelled &&
+          !(order.paymentMethod?.toLowerCase() == 'gcash' && order.paymentVerified != true)
+        ).toList();
+        
+        // Completed orders: delivered or cancelled
         _completedOrders = orders.where((order) => 
           order.farmerStatus == FarmerOrderStatus.completed || 
           order.farmerStatus == FarmerOrderStatus.cancelled
@@ -299,7 +311,33 @@ class _BuyerOrdersScreenState extends State<BuyerOrdersScreen> with SingleTicker
               text: 'Active (${_activeOrders.length})',
             ),
             Tab(
-              text: 'Completed (${_completedOrders.length})',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Pending'),
+                  if (_pendingPaymentOrders.isNotEmpty) ...[
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.orange,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${_pendingPaymentOrders.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Tab(
+              text: 'History (${_completedOrders.length})',
             ),
           ],
         ),
@@ -310,6 +348,7 @@ class _BuyerOrdersScreenState extends State<BuyerOrdersScreen> with SingleTicker
               controller: _tabController,
               children: [
                 _buildOrdersList(_activeOrders, isActive: true),
+                _buildPendingPaymentList(_pendingPaymentOrders),
                 _buildOrdersList(_completedOrders, isActive: false),
               ],
             ),
@@ -336,6 +375,208 @@ class _BuyerOrdersScreenState extends State<BuyerOrdersScreen> with SingleTicker
           final order = orders[index];
           return _buildOrderCard(order);
         },
+      ),
+    );
+  }
+
+  Widget _buildPendingPaymentList(List<OrderModel> orders) {
+    if (orders.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.check_circle_outline, size: 80, color: Colors.grey.shade300),
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                'No pending payments',
+                style: AppTextStyles.heading2.copyWith(
+                  color: AppTheme.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Orders with pending GCash payment confirmation will appear here.',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: Colors.grey.shade600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadOrders,
+      child: ListView.builder(
+        padding: const EdgeInsets.only(
+          left: AppSpacing.md,
+          right: AppSpacing.md,
+          top: AppSpacing.md,
+          bottom: 100,
+        ),
+        itemCount: orders.length,
+        itemBuilder: (context, index) {
+          final order = orders[index];
+          return _buildPendingPaymentCard(order);
+        },
+      ),
+    );
+  }
+
+  Widget _buildPendingPaymentCard(OrderModel order) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: InkWell(
+        onTap: () => context.push(
+          RouteNames.buyerOrderDetails.replaceAll(':id', order.id),
+        ),
+        borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Warning banner
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.pending_outlined, color: Colors.orange.shade700, size: 20),
+                    const SizedBox(width: AppSpacing.xs),
+                    Expanded(
+                      child: Text(
+                        'Waiting for payment confirmation',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: Colors.orange.shade700,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              
+              // Order header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Order #${order.id.substring(0, 8)}',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(AppBorderRadius.small),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.payment, size: 14, color: Colors.orange.shade700),
+                        const SizedBox(width: 4),
+                        Text(
+                          'GCash',
+                          style: AppTextStyles.caption.copyWith(
+                            color: Colors.orange.shade700,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: AppSpacing.sm),
+              
+              // Order details
+              Row(
+                children: [
+                  Icon(
+                    Icons.calendar_today,
+                    size: 16,
+                    color: Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text('Ordered: ${_formatExactDateTime(order.createdAt)}', style: AppTextStyles.bodySmall),
+                  const SizedBox(width: AppSpacing.md),
+                  Icon(
+                    Icons.shopping_bag,
+                    size: 16,
+                    color: Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text(
+                    '${order.items.length} item${order.items.length != 1 ? 's' : ''}',
+                    style: AppTextStyles.bodySmall,
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: AppSpacing.md),
+              
+              // Order items preview
+              if (order.items.isNotEmpty) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        order.items.map((item) => item.productName).join(', '),
+                        style: AppTextStyles.bodySmall,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              
+              // Order footer
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Total: ₱${order.totalAmount.toStringAsFixed(2)}',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppTheme.primaryGreen,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Row(
+                    children: [
+                      Text('View Details', style: TextStyle(color: AppTheme.primaryGreen, fontWeight: FontWeight.w600)),
+                      SizedBox(width: 4),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: AppTheme.primaryGreen,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

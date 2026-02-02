@@ -12,6 +12,8 @@ import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/order_status_widgets.dart';
 import '../../chat/screens/chat_conversation_screen.dart';
 import '../../../shared/widgets/report_dialog.dart';
+import '../../../core/services/transaction_service.dart';
+import '../../../core/models/transaction_model.dart';
 
 class OrderDetailsScreen extends StatefulWidget {
   final String orderId;
@@ -29,11 +31,14 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   final OrderService _orderService = OrderService();
   final AuthService _authService = AuthService();
   final ChatService _chatService = ChatService();
+  final TransactionService _transactionService = TransactionService();
   
   OrderModel? _order;
+  RefundRequestModel? _refundRequest;
   bool _isLoading = true;
   String? _error;
   bool _isCancelling = false;
+  bool _isRequestingRefund = false;
 
   @override
   void initState() {
@@ -50,8 +55,19 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
       final order = await _orderService.getOrderById(widget.orderId);
       
+      // Load refund request if it exists
+      RefundRequestModel? refundRequest;
+      if (order?.paymentMethod?.toLowerCase() == 'gcash' && order?.refundRequested == true) {
+        try {
+          refundRequest = await _transactionService.getRefundRequestByOrderId(widget.orderId);
+        } catch (e) {
+          // Refund request not found or error, continue without it
+        }
+      }
+      
       setState(() {
         _order = order;
+        _refundRequest = refundRequest;
         _isLoading = false;
       });
     } catch (e) {
@@ -269,8 +285,202 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
   bool _canCancelOrder() {
     if (_order == null) return false;
+    
+    // OPTION B: Block cancellation for GCash orders with payment proof
+    // This protects buyers from losing money on unverified payments
+    if (_order!.paymentMethod?.toLowerCase() == 'gcash') {
+      // Case 1: Payment verified → Must use refund process
+      if (_order!.paymentVerified == true) {
+        return false; // Force "Request Refund" for verified payments
+      }
+      
+      // Case 2: Payment proof uploaded but not verified yet → Block cancel
+      // Reason: Money might already be with farmer, need admin verification first
+      if (_order!.paymentScreenshotUrl != null || _order!.paymentReference != null) {
+        return false; // Wait for verification, then use refund process
+      }
+      
+      // Case 3: No payment proof uploaded yet → Allow cancel
+      // Reason: No money transferred yet, safe to cancel
+      return _order!.farmerStatus == FarmerOrderStatus.newOrder ||
+             _order!.farmerStatus == FarmerOrderStatus.accepted;
+    }
+    
+    // Allow cancel for COD/COP orders (no prepayment involved)
     return _order!.farmerStatus == FarmerOrderStatus.newOrder ||
            _order!.farmerStatus == FarmerOrderStatus.accepted;
+  }
+
+  bool _canRequestRefund() {
+    if (_order == null) return false;
+    // Can request refund if:
+    // 1. Payment method is GCash
+    // 2. Payment is verified
+    // 3. Order is not completed or cancelled
+    // 4. No existing refund request
+    return _order!.paymentMethod?.toLowerCase() == 'gcash' &&
+           _order!.paymentVerified == true &&
+           _order!.farmerStatus != FarmerOrderStatus.completed &&
+           _order!.farmerStatus != FarmerOrderStatus.cancelled &&
+           !_order!.refundRequested;
+  }
+
+  Future<void> _requestRefund() async {
+    if (_order == null || _isRequestingRefund) return;
+
+    final refundReasons = [
+      'Order taking too long to process',
+      'Need to cancel due to changed plans',
+      'Found product elsewhere',
+      'Financial reasons',
+      'Farmer not responding',
+      'Product quality concerns',
+      'Other',
+    ];
+
+    String? selectedReason;
+    final detailsController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Request Refund'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Request a refund of ₱${_order!.totalAmount.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Please select a reason:',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: selectedReason,
+                      hint: const Text('Select reason'),
+                      isExpanded: true,
+                      items: refundReasons.map((reason) {
+                        return DropdownMenuItem<String>(
+                          value: reason,
+                          child: Text(reason, style: const TextStyle(fontSize: 14)),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedReason = value;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: detailsController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: 'Additional details (optional)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    hintText: 'Provide more information about your refund request',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Refunds will be processed within 3-5 business days after approval',
+                          style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: selectedReason == null
+                  ? null
+                  : () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.primaryGreen,
+              ),
+              child: const Text('Submit Request'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || selectedReason == null) return;
+
+    setState(() => _isRequestingRefund = true);
+
+    try {
+      await _transactionService.createRefundRequest(
+        orderId: _order!.id,
+        amount: _order!.totalAmount,
+        reason: selectedReason!, // Non-null because we check above
+        additionalDetails: detailsController.text.trim().isEmpty 
+            ? null 
+            : detailsController.text.trim(),
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Refund request submitted successfully'),
+            backgroundColor: AppTheme.successGreen,
+          ),
+        );
+        await _loadOrder();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error submitting refund request: $e'),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isRequestingRefund = false);
+      }
+    }
   }
 
   @override
@@ -447,44 +657,56 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: AppTheme.lightGrey),
             ),
-            child: Row(
+            child: Column(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    _getPaymentIcon(_order!.paymentMethod),
-                    color: Colors.green.shade700,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Payment Method',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
-                        ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _getPaymentMethodLabel(_order!.paymentMethod),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary,
-                        ),
+                      child: Icon(
+                        _getPaymentIcon(_order!.paymentMethod),
+                        color: Colors.green.shade700,
+                        size: 20,
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Payment Method',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _getPaymentMethodLabel(_order!.paymentMethod),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
+                
+                // Show payment status for GCash orders
+                if (_order!.paymentMethod?.toLowerCase() == 'gcash') ...[
+                  const SizedBox(height: 12),
+                  const Divider(height: 1),
+                  const SizedBox(height: 12),
+                  _buildPaymentStatus(),
+                ],
               ],
             ),
           ),
@@ -578,6 +800,112 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
           const SizedBox(height: AppSpacing.xl),
 
+          // Refund request status if exists
+          if (_refundRequest != null) ...[
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: _getRefundStatusColor(_refundRequest!.status).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: _getRefundStatusColor(_refundRequest!.status)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _getRefundStatusIcon(_refundRequest!.status),
+                        color: _getRefundStatusColor(_refundRequest!.status),
+                        size: 24,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Refund ${_refundRequest!.status.toUpperCase()}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: _getRefundStatusColor(_refundRequest!.status),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Amount: ₱${_refundRequest!.amount.toStringAsFixed(2)}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  Text(
+                    'Reason: ${_refundRequest!.reason}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  if (_refundRequest!.processedAt != null)
+                    Text(
+                      'Processed: ${DateFormat('MMM dd, yyyy').format(_refundRequest!.processedAt!)}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    ),
+                  if (_refundRequest!.adminNotes != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Admin Notes: ${_refundRequest!.adminNotes}',
+                      style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
+
+          // Info banner for GCash orders (explaining why cancel is blocked)
+          if (_order!.paymentMethod?.toLowerCase() == 'gcash' && 
+              !_canCancelOrder() &&
+              (_order!.farmerStatus == FarmerOrderStatus.newOrder ||
+               _order!.farmerStatus == FarmerOrderStatus.accepted)) ...[
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: _order!.paymentVerified == true 
+                    ? Colors.blue.shade50 
+                    : Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: _order!.paymentVerified == true 
+                      ? Colors.blue.shade200 
+                      : Colors.orange.shade200,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline, 
+                    color: _order!.paymentVerified == true 
+                        ? Colors.blue.shade700 
+                        : Colors.orange.shade700, 
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _order!.paymentVerified == true
+                          ? 'Since your payment is verified, please use "Request Refund" below to cancel this order. Our admin will process your request within 24 hours.'
+                          : 'Your payment is being verified. Please wait for verification to complete before requesting a cancellation. This protects your money from being lost.',
+                      style: TextStyle(
+                        fontSize: 13, 
+                        color: _order!.paymentVerified == true 
+                            ? Colors.blue.shade700 
+                            : Colors.orange.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+
           // Action buttons based on real farmer status
           if (_canCancelOrder()) ...[
             CustomButton(
@@ -586,6 +914,18 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               isLoading: _isCancelling,
               width: double.infinity,
               backgroundColor: AppTheme.errorRed,
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+
+          // Request refund button for GCash orders
+          if (_canRequestRefund()) ...[
+            CustomButton(
+              text: _isRequestingRefund ? 'Submitting...' : 'Request Refund',
+              onPressed: _isRequestingRefund ? null : _requestRefund,
+              isLoading: _isRequestingRefund,
+              width: double.infinity,
+              backgroundColor: Colors.orange,
             ),
             const SizedBox(height: AppSpacing.md),
           ],
@@ -826,6 +1166,141 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     
     if (result == true && mounted) {
       // Report submitted successfully
+    }
+  }
+
+  Widget _buildPaymentStatus() {
+    final hasScreenshot = _order!.paymentScreenshotUrl != null;
+    final isVerified = _order!.paymentVerified ?? false;
+    
+    Color statusColor;
+    IconData statusIcon;
+    String statusText;
+    
+    if (isVerified) {
+      statusColor = Colors.green;
+      statusIcon = Icons.check_circle;
+      statusText = 'Payment Verified';
+    } else if (hasScreenshot) {
+      statusColor = Colors.orange;
+      statusIcon = Icons.pending;
+      statusText = 'Pending Verification';
+    } else {
+      statusColor = Colors.red;
+      statusIcon = Icons.warning;
+      statusText = 'Payment Proof Required';
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(statusIcon, color: statusColor, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                statusText,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: statusColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+        
+        if (_order!.paymentReference != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Ref: ${_order!.paymentReference}',
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ],
+        
+        if (!hasScreenshot) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.orange.shade700, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Please upload payment proof to process your order',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.orange.shade700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        
+        if (hasScreenshot && !isVerified) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Your payment is being verified by the farmer',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ],
+        
+        if (isVerified && _order!.paymentVerifiedAt != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Verified on ${DateFormat('MMM dd, yyyy').format(_order!.paymentVerifiedAt!)}',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Color _getRefundStatusColor(String status) {
+    switch (status) {
+      case 'pending':
+        return Colors.orange;
+      case 'approved':
+        return AppTheme.successGreen;
+      case 'rejected':
+        return AppTheme.errorRed;
+      case 'processing':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _getRefundStatusIcon(String status) {
+    switch (status) {
+      case 'pending':
+        return Icons.pending_outlined;
+      case 'approved':
+        return Icons.check_circle_outline;
+      case 'rejected':
+        return Icons.cancel_outlined;
+      case 'processing':
+        return Icons.hourglass_empty;
+      default:
+        return Icons.info_outline;
     }
   }
 }

@@ -17,6 +17,7 @@ class RouteNames {
   static const String search = '/buyer/search';
   static const String cart = '/buyer/cart';
   static const String checkout = '/buyer/checkout';
+  static const String uploadPaymentProof = '/buyer/upload-payment-proof';
   static const String buyerOrders = '/buyer/orders';
   static const String buyerOrderDetails = '/buyer/order/:id';
   
@@ -65,6 +66,9 @@ class RouteNames {
   static const String paymentSettings = '/farmer/payment-settings';
   static const String requestPayout = '/farmer/request-payout';
   
+  // Admin payment verification (moved from farmer)
+  static const String adminPaymentVerification = '/admin/payment-verification';
+  
   // Payout routes (Admin)
   static const String adminPayouts = '/admin/payouts';
   
@@ -86,9 +90,14 @@ class RouteNames {
   static const String submitFeedback = '/feedback';
   static const String submitReport = '/report';
   
+  // Transaction routes
+  static const String transactionHistory = '/transaction-history';
+  static const String paymentHistory = '/payment-history';
+  
   // Admin routes
   static const String adminLogin = '/admin/login';
   static const String adminDashboard = '/admin/dashboard';
+  static const String adminRefundManagement = '/admin/refund-management';
   static const String adminVerifications = '/admin/verifications';
   static const String adminUsers = '/admin/users';
   static const String adminReports = '/admin/reports';

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_service.dart';
 
@@ -184,7 +185,7 @@ class StorageService {
   }
 
   // Upload payment proof for subscription
-  Future<String> uploadPaymentProof(
+  Future<String> uploadSubscriptionPaymentProof(
     File image, {
     required String userId,
   }) async {
@@ -199,6 +200,31 @@ class StorageService {
       );
     } catch (e) {
       rethrow;
+    }
+  }
+
+  // Upload GCash payment proof screenshot (for buyer orders)
+  Future<String> uploadOrderPaymentProof({
+    required String fileName,
+    required Uint8List fileBytes,
+  }) async {
+    try {
+      await _supabase.storage.from(StorageBuckets.verificationDocuments).uploadBinary(
+        'payment-proofs/$fileName',
+        fileBytes,
+        fileOptions: const FileOptions(
+          cacheControl: '3600',
+          upsert: false,
+          contentType: 'image/jpeg',
+        ),
+      );
+      
+      return _supabase.getPublicUrl(
+        StorageBuckets.verificationDocuments,
+        'payment-proofs/$fileName',
+      );
+    } catch (e) {
+      throw Exception('Failed to upload payment proof: $e');
     }
   }
 

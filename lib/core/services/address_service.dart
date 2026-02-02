@@ -60,6 +60,9 @@ class AddressService {
     String province = 'Agusan del Sur',
     String postalCode = '',
     bool isDefault = false,
+    double? latitude,
+    double? longitude,
+    double? accuracy,
   }) async {
     try {
       // If this is set as default, remove default from other addresses
@@ -75,6 +78,9 @@ class AddressService {
         'municipality': municipality,
         'postal_code': postalCode,
         'is_default': isDefault,
+        'latitude': latitude,
+        'longitude': longitude,
+        'accuracy': accuracy,
         'created_at': DateTime.now().toIso8601String(),
       };
 
@@ -102,6 +108,9 @@ class AddressService {
     String? province,
     String? postalCode,
     bool? isDefault,
+    double? latitude,
+    double? longitude,
+    double? accuracy,
   }) async {
     try {
       // If setting as default, remove default from other addresses
@@ -116,6 +125,9 @@ class AddressService {
       if (municipality != null) updateData['municipality'] = municipality;
       if (postalCode != null) updateData['postal_code'] = postalCode;
       if (isDefault != null) updateData['is_default'] = isDefault;
+      if (latitude != null) updateData['latitude'] = latitude;
+      if (longitude != null) updateData['longitude'] = longitude;
+      if (accuracy != null) updateData['accuracy'] = accuracy;
       
       updateData['updated_at'] = DateTime.now().toIso8601String();
 

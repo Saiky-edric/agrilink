@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/app_theme.dart';
 
 enum SocialProvider {
   google,
-  facebook,
 }
 
 class SocialSignInButton extends StatelessWidget {
@@ -65,62 +63,32 @@ class SocialSignInButton extends StatelessWidget {
   }
 
   Color _getBackgroundColor() {
-    switch (provider) {
-      case SocialProvider.google:
-        return Colors.white;
-      case SocialProvider.facebook:
-        return const Color(0xFF1877F2);
-    }
+    return Colors.white;
   }
 
   Color _getTextColor() {
-    switch (provider) {
-      case SocialProvider.google:
-        return const Color(0xFF1F1F1F);
-      case SocialProvider.facebook:
-        return Colors.white;
-    }
+    return const Color(0xFF1F1F1F);
   }
 
   BorderSide _getBorderSide() {
-    switch (provider) {
-      case SocialProvider.google:
-        return BorderSide(color: Colors.grey.shade300, width: 1);
-      case SocialProvider.facebook:
-        return BorderSide.none;
-    }
+    return BorderSide(color: Colors.grey.shade300, width: 1);
   }
 
   Widget _getIcon() {
-    switch (provider) {
-      case SocialProvider.google:
-        return SizedBox(
-          width: 24,
-          height: 24,
-          child: CustomPaint(
-            painter: GoogleLogoPainter(),
-            size: const Size(24, 24),
-          ),
-        );
-      case SocialProvider.facebook:
-        return SizedBox(
-          width: 24,
-          height: 24,
-          child: CustomPaint(
-            painter: FacebookLogoPainter(),
-            size: const Size(24, 24),
-          ),
-        );
-    }
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: Image.asset(
+        'assets/images/logos/google_logo.png',
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+      ),
+    );
   }
 
   String _getText() {
-    switch (provider) {
-      case SocialProvider.google:
-        return 'Continue with Google';
-      case SocialProvider.facebook:
-        return 'Continue with Facebook';
-    }
+    return 'Continue with Google';
   }
 }
 
@@ -140,9 +108,6 @@ class GoogleLogoPainter extends CustomPainter {
     const redColor = Color(0xFFEA4335);   // Google Red
     const yellowColor = Color(0xFFFBBC05); // Google Yellow
     const greenColor = Color(0xFF34A853); // Google Green
-    
-    // Draw the G shape using precise paths
-    final path = Path();
     
     // Main circle outline
     paint.color = blueColor;
@@ -235,65 +200,3 @@ class GoogleLogoPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// Accurate Facebook Logo Painter - Based on official Facebook brand guidelines
-class FacebookLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..style = PaintingStyle.fill
-      ..color = Colors.white
-      ..isAntiAlias = true;
-    
-    final width = size.width;
-    final height = size.height;
-    
-    // Create precise Facebook 'f' logo path
-    final path = Path();
-    
-    // Start from top of vertical line
-    path.moveTo(width * 0.45, height * 0.15);
-    
-    // Top horizontal line (header of 'f')
-    path.lineTo(width * 0.75, height * 0.15);
-    path.lineTo(width * 0.75, height * 0.30);
-    path.lineTo(width * 0.58, height * 0.30);
-    
-    // Middle horizontal line (crossbar of 'f')
-    path.lineTo(width * 0.58, height * 0.42);
-    path.lineTo(width * 0.70, height * 0.42);
-    path.lineTo(width * 0.70, height * 0.52);
-    path.lineTo(width * 0.58, height * 0.52);
-    
-    // Bottom part of vertical line
-    path.lineTo(width * 0.58, height * 0.85);
-    path.lineTo(width * 0.45, height * 0.85);
-    path.lineTo(width * 0.45, height * 0.52);
-    
-    // Connection back to start (left side)
-    path.lineTo(width * 0.35, height * 0.52);
-    path.lineTo(width * 0.35, height * 0.42);
-    path.lineTo(width * 0.45, height * 0.42);
-    
-    // Complete the path
-    path.close();
-    
-    canvas.drawPath(path, paint);
-    
-    // Optional: Add some refinement to make it look more like the official logo
-    // Top serif (small line at the top)
-    final topSerif = Path();
-    topSerif.moveTo(width * 0.45, height * 0.15);
-    topSerif.lineTo(width * 0.48, height * 0.12);
-    topSerif.lineTo(width * 0.75, height * 0.12);
-    topSerif.lineTo(width * 0.75, height * 0.18);
-    topSerif.lineTo(width * 0.48, height * 0.18);
-    topSerif.close();
-    
-    // Draw the refined top
-    paint.style = PaintingStyle.fill;
-    canvas.drawPath(topSerif, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

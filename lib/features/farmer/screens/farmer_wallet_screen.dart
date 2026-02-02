@@ -245,7 +245,15 @@ class _FarmerWalletScreenState extends State<FarmerWalletScreen> {
               height: 1.2,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
+          Text(
+            'From prepaid orders (GCash verified)',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.9),
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 12),
           if (_walletSummary!.availableBalance < 100)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -259,11 +267,13 @@ class _FarmerWalletScreenState extends State<FarmerWalletScreen> {
                 children: [
                   Icon(Icons.info_outline, color: Colors.orange.shade100, size: 16),
                   const SizedBox(width: 6),
-                  Text(
-                    'Minimum ₱100 required to request payout',
-                    style: TextStyle(
-                      color: Colors.orange.shade100,
-                      fontSize: 12,
+                  Expanded(
+                    child: Text(
+                      'Minimum ₱100 required to request payout',
+                      style: TextStyle(
+                        color: Colors.orange.shade100,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ],
@@ -343,30 +353,61 @@ class _FarmerWalletScreenState extends State<FarmerWalletScreen> {
   }
 
   Widget _buildQuickStats() {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: _buildStatCard(
-            'Pending Earnings',
-            '₱${_walletSummary!.pendingEarnings.toStringAsFixed(2)}',
-            Icons.schedule,
-            Colors.blue,
+        // Info banner about payment methods
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blue.shade200),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Available Balance is from prepaid orders. You\'ll pay delivery fees when shipping.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.blue.shade900,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildStatCard(
-            'Total Paid Out',
-            '₱${_walletSummary!.totalPaidOut.toStringAsFixed(2)}',
-            Icons.check_circle,
-            Colors.green,
-          ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                'Pending Earnings',
+                '₱${_walletSummary!.pendingEarnings.toStringAsFixed(2)}',
+                Icons.schedule,
+                Colors.blue,
+                'Orders in progress',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildStatCard(
+                'Total Paid Out',
+                '₱${_walletSummary!.totalPaidOut.toStringAsFixed(2)}',
+                Icons.check_circle,
+                Colors.green,
+                'Total withdrawn',
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+  Widget _buildStatCard(String label, String value, IconData icon, Color color, [String? subtitle]) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -407,6 +448,16 @@ class _FarmerWalletScreenState extends State<FarmerWalletScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
         ],
       ),
     );

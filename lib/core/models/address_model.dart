@@ -7,6 +7,9 @@ class AddressModel {
   String province;
   String postalCode;
   bool isDefault;
+  double? latitude;
+  double? longitude;
+  double? accuracy;
   DateTime? createdAt;
   DateTime? updatedAt;
 
@@ -19,6 +22,9 @@ class AddressModel {
     this.province = 'Agusan del Sur',
     this.postalCode = '',
     required this.isDefault,
+    this.latitude,
+    this.longitude,
+    this.accuracy,
     this.createdAt,
     this.updatedAt,
   });
@@ -30,6 +36,8 @@ class AddressModel {
     return parts.join(', ');
   }
 
+  bool get hasCoordinates => latitude != null && longitude != null;
+
   factory AddressModel.fromJson(Map<String, dynamic> json) {
     return AddressModel(
       id: json['id'] as String,
@@ -40,6 +48,9 @@ class AddressModel {
       province: json['province'] as String? ?? 'Agusan del Sur',
       postalCode: json['postal_code'] as String? ?? '',
       isDefault: json['is_default'] as bool? ?? false,
+      latitude: json['latitude'] as double?,
+      longitude: json['longitude'] as double?,
+      accuracy: json['accuracy'] as double?,
       createdAt: json['created_at'] != null 
           ? DateTime.parse(json['created_at'] as String)
           : null,
@@ -59,6 +70,9 @@ class AddressModel {
       'province': province,
       'postal_code': postalCode,
       'is_default': isDefault,
+      'latitude': latitude,
+      'longitude': longitude,
+      'accuracy': accuracy,
       'created_at': createdAt?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
     };
@@ -73,6 +87,9 @@ class AddressModel {
     String? province,
     String? postalCode,
     bool? isDefault,
+    double? latitude,
+    double? longitude,
+    double? accuracy,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -85,6 +102,9 @@ class AddressModel {
       province: province ?? this.province,
       postalCode: postalCode ?? this.postalCode,
       isDefault: isDefault ?? this.isDefault,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      accuracy: accuracy ?? this.accuracy,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

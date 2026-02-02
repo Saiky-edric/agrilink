@@ -1,353 +1,545 @@
--- Agrilink Digital Marketplace - Complete Database Schema
--- Execute these SQL commands in your Supabase SQL editor
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
 
--- Enable necessary extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Create ENUM types for better data consistency
-CREATE TYPE user_role AS ENUM ('buyer', 'farmer', 'admin');
-CREATE TYPE verification_status AS ENUM ('pending', 'approved', 'rejected', 'needsResubmit');
-CREATE TYPE product_category AS ENUM ('vegetables', 'fruits', 'grains', 'herbs', 'livestock', 'dairy', 'others');
-CREATE TYPE buyer_order_status AS ENUM ('pending', 'toShip', 'toReceive', 'completed', 'cancelled');
-CREATE TYPE farmer_order_status AS ENUM ('newOrder', 'toPack', 'toDeliver', 'completed', 'cancelled');
-CREATE TYPE report_type AS ENUM ('product', 'user', 'order');
-
--- =============================================
--- USERS TABLE
--- =============================================
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email TEXT UNIQUE NOT NULL,
-    full_name TEXT NOT NULL,
-    phone_number TEXT NOT NULL,
-    role user_role NOT NULL DEFAULT 'buyer',
-    municipality TEXT,
-    barangay TEXT,
-    street TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.admin_activities (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  description text NOT NULL,
+  type text NOT NULL DEFAULT 'general'::text,
+  timestamp timestamp with time zone DEFAULT now(),
+  user_id uuid,
+  user_name text,
+  metadata jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT admin_activities_pkey PRIMARY KEY (id),
+  CONSTRAINT admin_activities_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
--- Add RLS (Row Level Security)
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-
--- Users can read and update their own profile
-CREATE POLICY "Users can view own profile" ON users FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING (auth.uid() = id);
-
--- =============================================
--- FARMER VERIFICATIONS TABLE
--- =============================================
-CREATE TABLE farmer_verifications (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    farmer_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    farm_name TEXT NOT NULL,
-    farm_address TEXT NOT NULL,
-    farmer_id_image_url TEXT NOT NULL,
-    barangay_cert_image_url TEXT NOT NULL,
-    selfie_image_url TEXT NOT NULL,
-    status verification_status DEFAULT 'pending',
-    rejection_reason TEXT,
-    admin_notes TEXT,
-    reviewed_by_admin_id UUID REFERENCES users(id),
-    reviewed_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.cart (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid,
+  product_id uuid,
+  quantity integer NOT NULL CHECK (quantity > 0),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT cart_pkey PRIMARY KEY (id),
+  CONSTRAINT cart_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT cart_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
 );
-
-ALTER TABLE farmer_verifications ENABLE ROW LEVEL SECURITY;
-
--- Farmers can view their own verification
-CREATE POLICY "Farmers can view own verification" ON farmer_verifications 
-FOR SELECT USING (auth.uid() = farmer_id);
-
--- Farmers can insert their own verification
-CREATE POLICY "Farmers can insert own verification" ON farmer_verifications 
-FOR INSERT WITH CHECK (auth.uid() = farmer_id);
-
--- Admins can view and update all verifications
-CREATE POLICY "Admins can manage verifications" ON farmer_verifications 
-FOR ALL USING (
-    EXISTS (
-        SELECT 1 FROM users 
-        WHERE id = auth.uid() AND role = 'admin'
-    )
+CREATE TABLE public.conversations (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  buyer_id uuid,
+  farmer_id uuid,
+  last_message text,
+  last_message_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT conversations_pkey PRIMARY KEY (id),
+  CONSTRAINT conversations_buyer_id_fkey FOREIGN KEY (buyer_id) REFERENCES public.users(id),
+  CONSTRAINT conversations_farmer_id_fkey FOREIGN KEY (farmer_id) REFERENCES public.users(id)
 );
-
--- =============================================
--- PRODUCTS TABLE
--- =============================================
-CREATE TABLE products (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    farmer_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    price DECIMAL(10,2) NOT NULL CHECK (price > 0),
-    stock INTEGER NOT NULL CHECK (stock >= 0),
-    unit TEXT NOT NULL,
-    shelf_life_days INTEGER NOT NULL CHECK (shelf_life_days > 0),
-    category product_category NOT NULL,
-    description TEXT NOT NULL,
-    cover_image_url TEXT NOT NULL,
-    additional_image_urls TEXT[] DEFAULT '{}',
-    farm_name TEXT NOT NULL,
-    farm_location TEXT NOT NULL,
-    is_hidden BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.farm_information (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farmer_id uuid NOT NULL UNIQUE,
+  location text NOT NULL DEFAULT ''::text,
+  size text NOT NULL DEFAULT ''::text,
+  years_experience integer NOT NULL DEFAULT 0,
+  primary_crops ARRAY DEFAULT ARRAY[]::text[],
+  farming_methods ARRAY DEFAULT ARRAY[]::text[],
+  description text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT farm_information_pkey PRIMARY KEY (id),
+  CONSTRAINT farm_information_farmer_id_fkey FOREIGN KEY (farmer_id) REFERENCES public.users(id)
 );
-
-ALTER TABLE products ENABLE ROW LEVEL SECURITY;
-
--- Anyone can view non-hidden products
-CREATE POLICY "Anyone can view available products" ON products 
-FOR SELECT USING (NOT is_hidden);
-
--- Farmers can manage their own products
-CREATE POLICY "Farmers can manage own products" ON products 
-FOR ALL USING (auth.uid() = farmer_id);
-
--- Admins can view and hide/unhide products
-CREATE POLICY "Admins can manage products" ON products 
-FOR ALL USING (
-    EXISTS (
-        SELECT 1 FROM users 
-        WHERE id = auth.uid() AND role = 'admin'
-    )
+CREATE TABLE public.farmer_verifications (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  farmer_id uuid,
+  farm_name text NOT NULL,
+  farm_address text NOT NULL,
+  farmer_id_image_url text NOT NULL,
+  barangay_cert_image_url text NOT NULL,
+  selfie_image_url text NOT NULL,
+  status USER-DEFINED DEFAULT 'pending'::verification_status,
+  rejection_reason text,
+  admin_notes text,
+  reviewed_by_admin_id uuid,
+  reviewed_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  reviewed_by uuid,
+  review_notes text,
+  user_name text,
+  user_email text,
+  verification_type text DEFAULT 'farmer'::text,
+  submitted_at timestamp with time zone DEFAULT now(),
+  farm_details jsonb,
+  CONSTRAINT farmer_verifications_pkey PRIMARY KEY (id),
+  CONSTRAINT farmer_verifications_farmer_id_fkey FOREIGN KEY (farmer_id) REFERENCES public.users(id),
+  CONSTRAINT farmer_verifications_reviewed_by_admin_id_fkey FOREIGN KEY (reviewed_by_admin_id) REFERENCES public.users(id),
+  CONSTRAINT farmer_verifications_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES auth.users(id)
 );
-
--- =============================================
--- SHOPPING CART TABLE
--- =============================================
-CREATE TABLE cart (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    product_id UUID REFERENCES products(id) ON DELETE CASCADE,
-    quantity INTEGER NOT NULL CHECK (quantity > 0),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(user_id, product_id)
+CREATE TABLE public.feedback (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid,
+  message text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT feedback_pkey PRIMARY KEY (id),
+  CONSTRAINT feedback_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
-
-ALTER TABLE cart ENABLE ROW LEVEL SECURITY;
-
--- Users can manage their own cart
-CREATE POLICY "Users can manage own cart" ON cart 
-FOR ALL USING (auth.uid() = user_id);
-
--- =============================================
--- ORDERS TABLE
--- =============================================
-CREATE TABLE orders (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    buyer_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    farmer_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    total_amount DECIMAL(10,2) NOT NULL CHECK (total_amount > 0),
-    delivery_address TEXT NOT NULL,
-    special_instructions TEXT,
-    buyer_status buyer_order_status DEFAULT 'pending',
-    farmer_status farmer_order_status DEFAULT 'newOrder',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    completed_at TIMESTAMP WITH TIME ZONE
+CREATE TABLE public.messages (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  conversation_id uuid,
+  sender_id uuid,
+  content text NOT NULL,
+  is_read boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT messages_pkey PRIMARY KEY (id),
+  CONSTRAINT messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id),
+  CONSTRAINT messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.users(id)
 );
-
-ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
-
--- Buyers and farmers can view their own orders
-CREATE POLICY "Buyers can view own orders" ON orders 
-FOR SELECT USING (auth.uid() = buyer_id);
-
-CREATE POLICY "Farmers can view own orders" ON orders 
-FOR SELECT USING (auth.uid() = farmer_id);
-
--- Buyers can update their order status
-CREATE POLICY "Buyers can update own orders" ON orders 
-FOR UPDATE USING (auth.uid() = buyer_id);
-
--- Farmers can update their order status
-CREATE POLICY "Farmers can update own orders" ON orders 
-FOR UPDATE USING (auth.uid() = farmer_id);
-
--- =============================================
--- ORDER ITEMS TABLE
--- =============================================
-CREATE TABLE order_items (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
-    product_id UUID REFERENCES products(id),
-    product_name TEXT NOT NULL,
-    unit_price DECIMAL(10,2) NOT NULL CHECK (unit_price > 0),
-    quantity INTEGER NOT NULL CHECK (quantity > 0),
-    unit TEXT NOT NULL,
-    subtotal DECIMAL(10,2) NOT NULL CHECK (subtotal > 0)
+CREATE TABLE public.notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  title character varying NOT NULL,
+  message text NOT NULL,
+  type character varying NOT NULL,
+  related_id uuid,
+  is_read boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  data jsonb,
+  CONSTRAINT notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
-
-ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
-
--- Users can view order items for their orders
-CREATE POLICY "Users can view own order items" ON order_items 
-FOR SELECT USING (
-    EXISTS (
-        SELECT 1 FROM orders 
-        WHERE id = order_id AND (buyer_id = auth.uid() OR farmer_id = auth.uid())
-    )
+CREATE TABLE public.order_items (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  order_id uuid,
+  product_id uuid,
+  product_name text NOT NULL,
+  unit_price numeric NOT NULL CHECK (unit_price > 0::numeric),
+  quantity integer NOT NULL CHECK (quantity > 0),
+  unit text NOT NULL,
+  subtotal numeric NOT NULL CHECK (subtotal > 0::numeric),
+  CONSTRAINT order_items_pkey PRIMARY KEY (id),
+  CONSTRAINT order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT order_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
 );
-
--- =============================================
--- CONVERSATIONS TABLE (FOR CHAT)
--- =============================================
-CREATE TABLE conversations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    buyer_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    farmer_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    last_message TEXT,
-    last_message_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(buyer_id, farmer_id)
+CREATE TABLE public.orders (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  buyer_id uuid,
+  farmer_id uuid,
+  total_amount numeric NOT NULL CHECK (total_amount > 0::numeric),
+  delivery_address text NOT NULL,
+  special_instructions text,
+  buyer_status USER-DEFINED DEFAULT 'pending'::buyer_order_status,
+  farmer_status USER-DEFINED DEFAULT 'newOrder'::farmer_order_status,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  completed_at timestamp with time zone,
+  tracking_number character varying,
+  delivery_date date,
+  delivery_notes text,
+  payment_method_id uuid,
+  delivery_address_id uuid,
+  seller_reviewed boolean DEFAULT false,
+  buyer_reviewed boolean DEFAULT false,
+  review_reminder_sent boolean DEFAULT false,
+  subtotal numeric DEFAULT 0,
+  delivery_fee numeric DEFAULT 0,
+  service_fee numeric DEFAULT 0,
+  distance_km double precision DEFAULT 0,
+  stock_deducted boolean NOT NULL DEFAULT false,
+  payment_status text DEFAULT 'pending'::text CHECK (payment_status = ANY (ARRAY['pending'::text, 'paid'::text, 'failed'::text, 'refunded'::text])),
+  paid_at timestamp with time zone,
+  delivery_method character varying DEFAULT 'delivery'::character varying CHECK (delivery_method::text = ANY (ARRAY['delivery'::character varying, 'pickup'::character varying]::text[])),
+  pickup_location_id uuid,
+  pickup_address text,
+  pickup_instructions text,
+  payment_method text CHECK (payment_method = ANY (ARRAY['cod'::text, 'cop'::text, 'gcash'::text, 'bank_transfer'::text, 'credit_card'::text])),
+  farmer_payout_amount numeric,
+  farmer_payout_status text DEFAULT 'pending'::text,
+  paid_out_at timestamp with time zone,
+  payment_screenshot_url text,
+  payment_reference text,
+  payment_verified boolean DEFAULT false,
+  payment_verified_at timestamp with time zone,
+  payment_verified_by uuid,
+  payment_notes text,
+  refund_requested boolean DEFAULT false,
+  refund_status text CHECK (refund_status = ANY (ARRAY['none'::text, 'pending'::text, 'approved'::text, 'rejected'::text, 'completed'::text])),
+  refunded_at timestamp with time zone,
+  refunded_amount numeric,
+  CONSTRAINT orders_pkey PRIMARY KEY (id),
+  CONSTRAINT orders_buyer_id_fkey FOREIGN KEY (buyer_id) REFERENCES public.users(id),
+  CONSTRAINT orders_farmer_id_fkey FOREIGN KEY (farmer_id) REFERENCES public.users(id),
+  CONSTRAINT orders_payment_method_id_fkey FOREIGN KEY (payment_method_id) REFERENCES public.payment_methods(id),
+  CONSTRAINT orders_delivery_address_id_fkey FOREIGN KEY (delivery_address_id) REFERENCES public.user_addresses(id),
+  CONSTRAINT orders_payment_verified_by_fkey FOREIGN KEY (payment_verified_by) REFERENCES public.users(id)
 );
-
-ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
-
--- Users can view conversations they're part of
-CREATE POLICY "Users can view own conversations" ON conversations 
-FOR SELECT USING (auth.uid() = buyer_id OR auth.uid() = farmer_id);
-
--- Users can create conversations
-CREATE POLICY "Users can create conversations" ON conversations 
-FOR INSERT WITH CHECK (auth.uid() = buyer_id OR auth.uid() = farmer_id);
-
--- Users can update conversations they're part of
-CREATE POLICY "Users can update own conversations" ON conversations 
-FOR UPDATE USING (auth.uid() = buyer_id OR auth.uid() = farmer_id);
-
--- =============================================
--- MESSAGES TABLE (FOR CHAT)
--- =============================================
-CREATE TABLE messages (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
-    sender_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
-    is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.payment_methods (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  card_type character varying NOT NULL,
+  last_four_digits character varying NOT NULL,
+  expiry_month integer NOT NULL CHECK (expiry_month >= 1 AND expiry_month <= 12),
+  expiry_year integer NOT NULL,
+  cardholder_name character varying NOT NULL,
+  is_default boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT payment_methods_pkey PRIMARY KEY (id),
+  CONSTRAINT payment_methods_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
-
-ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-
--- Users can view messages from their conversations
-CREATE POLICY "Users can view conversation messages" ON messages 
-FOR SELECT USING (
-    EXISTS (
-        SELECT 1 FROM conversations 
-        WHERE id = conversation_id AND (buyer_id = auth.uid() OR farmer_id = auth.uid())
-    )
+CREATE TABLE public.payment_verification_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  order_id uuid NOT NULL,
+  action text NOT NULL CHECK (action = ANY (ARRAY['uploaded'::text, 'verified'::text, 'rejected'::text])),
+  performed_by uuid NOT NULL,
+  notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT payment_verification_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT payment_verification_logs_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT payment_verification_logs_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES public.users(id)
 );
-
--- Users can send messages to their conversations
-CREATE POLICY "Users can send messages" ON messages 
-FOR INSERT WITH CHECK (
-    auth.uid() = sender_id AND
-    EXISTS (
-        SELECT 1 FROM conversations 
-        WHERE id = conversation_id AND (buyer_id = auth.uid() OR farmer_id = auth.uid())
-    )
+CREATE TABLE public.payments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  order_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  provider text NOT NULL DEFAULT 'paymongo'::text,
+  method text NOT NULL DEFAULT 'gcash'::text,
+  provider_payment_id text UNIQUE,
+  amount integer NOT NULL,
+  currency text NOT NULL DEFAULT 'PHP'::text,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'succeeded'::text, 'failed'::text, 'refunded'::text])),
+  metadata jsonb,
+  raw_response jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT payments_pkey PRIMARY KEY (id),
+  CONSTRAINT payments_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT payments_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
--- Users can mark their messages as read
-CREATE POLICY "Users can update message status" ON messages 
-FOR UPDATE USING (
-    EXISTS (
-        SELECT 1 FROM conversations 
-        WHERE id = conversation_id AND (buyer_id = auth.uid() OR farmer_id = auth.uid())
-    )
+CREATE TABLE public.payout_logs (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  payout_request_id uuid NOT NULL,
+  action text NOT NULL CHECK (action = ANY (ARRAY['requested'::text, 'approved'::text, 'rejected'::text, 'completed'::text, 'cancelled'::text])),
+  performed_by uuid,
+  notes text,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  has_transaction_proof boolean DEFAULT false,
+  CONSTRAINT payout_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT payout_logs_payout_request_id_fkey FOREIGN KEY (payout_request_id) REFERENCES public.payout_requests(id),
+  CONSTRAINT payout_logs_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES public.users(id)
 );
-
--- =============================================
--- FEEDBACK TABLE
--- =============================================
-CREATE TABLE feedback (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    message TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.payout_requests (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  farmer_id uuid NOT NULL,
+  amount numeric NOT NULL CHECK (amount > 0::numeric),
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'processing'::text, 'completed'::text, 'rejected'::text])),
+  payment_method text NOT NULL CHECK (payment_method = ANY (ARRAY['gcash'::text, 'bank_transfer'::text])),
+  payment_details jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_notes text,
+  admin_notes text,
+  rejection_reason text,
+  processed_by uuid,
+  requested_at timestamp with time zone DEFAULT now(),
+  processed_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  transaction_proof_url text,
+  transaction_reference text,
+  transaction_date timestamp with time zone,
+  actual_amount_sent numeric,
+  CONSTRAINT payout_requests_pkey PRIMARY KEY (id),
+  CONSTRAINT payout_requests_farmer_id_fkey FOREIGN KEY (farmer_id) REFERENCES public.users(id),
+  CONSTRAINT payout_requests_processed_by_fkey FOREIGN KEY (processed_by) REFERENCES public.users(id)
 );
-
-ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
-
--- Users can submit their own feedback
-CREATE POLICY "Users can submit feedback" ON feedback 
-FOR INSERT WITH CHECK (auth.uid() = user_id);
-
--- Admins can view all feedback
-CREATE POLICY "Admins can view feedback" ON feedback 
-FOR SELECT USING (
-    EXISTS (
-        SELECT 1 FROM users 
-        WHERE id = auth.uid() AND role = 'admin'
-    )
+CREATE TABLE public.platform_settings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  app_name text DEFAULT 'AgriLink'::text,
+  maintenance_mode boolean DEFAULT false,
+  new_user_registration boolean DEFAULT true,
+  max_product_images integer DEFAULT 5,
+  commission_rate numeric DEFAULT 0.05 CHECK (commission_rate >= 0::numeric AND commission_rate <= 1::numeric),
+  min_order_amount numeric DEFAULT 0.00,
+  max_order_amount numeric DEFAULT 10000.00,
+  featured_categories ARRAY DEFAULT '{}'::text[],
+  notification_settings jsonb DEFAULT '{}'::jsonb,
+  payment_methods jsonb DEFAULT '{}'::jsonb,
+  shipping_zones jsonb DEFAULT '{}'::jsonb,
+  updated_at timestamp with time zone DEFAULT now(),
+  updated_by uuid,
+  jt_per2kg_fee numeric DEFAULT 25.0,
+  singleton_guard boolean NOT NULL DEFAULT true,
+  agrilink_gcash_number text DEFAULT '09171234567'::text,
+  agrilink_gcash_name text DEFAULT 'AgriLink Marketplace'::text,
+  gcash_payment_instructions text DEFAULT 'Please send payment to the GCash number above. After payment, upload a screenshot and enter the reference number.'::text,
+  CONSTRAINT platform_settings_pkey PRIMARY KEY (id),
+  CONSTRAINT platform_settings_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES auth.users(id)
 );
-
--- =============================================
--- REPORTS TABLE
--- =============================================
-CREATE TABLE reports (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    reporter_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    target_id UUID NOT NULL,
-    type report_type NOT NULL,
-    description TEXT NOT NULL,
-    image_url TEXT,
-    is_resolved BOOLEAN DEFAULT FALSE,
-    admin_notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.product_reviews (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  product_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  rating integer NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  review_text text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  image_urls ARRAY DEFAULT '{}'::text[],
+  CONSTRAINT product_reviews_pkey PRIMARY KEY (id),
+  CONSTRAINT product_reviews_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id),
+  CONSTRAINT product_reviews_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
-
-ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
-
--- Users can submit reports
-CREATE POLICY "Users can submit reports" ON reports 
-FOR INSERT WITH CHECK (auth.uid() = reporter_id);
-
--- Users can view their own reports
-CREATE POLICY "Users can view own reports" ON reports 
-FOR SELECT USING (auth.uid() = reporter_id);
-
--- Admins can view and manage all reports
-CREATE POLICY "Admins can manage reports" ON reports 
-FOR ALL USING (
-    EXISTS (
-        SELECT 1 FROM users 
-        WHERE id = auth.uid() AND role = 'admin'
-    )
+CREATE TABLE public.products (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  farmer_id uuid,
+  name text NOT NULL,
+  price numeric NOT NULL CHECK (price > 0::numeric),
+  stock integer NOT NULL CHECK (stock >= 0),
+  unit text NOT NULL,
+  shelf_life_days integer NOT NULL CHECK (shelf_life_days > 0),
+  category USER-DEFINED NOT NULL,
+  description text NOT NULL,
+  cover_image_url text NOT NULL,
+  additional_image_urls ARRAY DEFAULT '{}'::text[],
+  farm_name text NOT NULL,
+  farm_location text NOT NULL,
+  is_hidden boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  is_featured boolean DEFAULT false,
+  discount_percentage numeric DEFAULT 0.00,
+  tags ARRAY,
+  harvest_date date,
+  image_urls ARRAY,
+  featured_until timestamp with time zone,
+  view_count integer DEFAULT 0,
+  popularity_score numeric DEFAULT 0.00,
+  subcategory text,
+  weight_per_unit double precision NOT NULL DEFAULT 0 CHECK (weight_per_unit >= 0::double precision),
+  deleted_at timestamp with time zone,
+  status text DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'expired'::text, 'deleted'::text])),
+  CONSTRAINT products_pkey PRIMARY KEY (id),
+  CONSTRAINT products_farmer_id_fkey FOREIGN KEY (farmer_id) REFERENCES public.users(id)
 );
-
--- =============================================
--- INDEXES FOR PERFORMANCE
--- =============================================
-
--- Users indexes
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_role ON users(role);
-
--- Products indexes
-CREATE INDEX idx_products_farmer_id ON products(farmer_id);
-CREATE INDEX idx_products_category ON products(category);
-CREATE INDEX idx_products_created_at ON products(created_at DESC);
-CREATE INDEX idx_products_is_hidden ON products(is_hidden);
-
--- Orders indexes
-CREATE INDEX idx_orders_buyer_id ON orders(buyer_id);
-CREATE INDEX idx_orders_farmer_id ON orders(farmer_id);
-CREATE INDEX idx_orders_created_at ON orders(created_at DESC);
-
--- Messages indexes
-CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
-CREATE INDEX idx_messages_created_at ON messages(created_at);
-
--- Conversations indexes
-CREATE INDEX idx_conversations_buyer_id ON conversations(buyer_id);
-CREATE INDEX idx_conversations_farmer_id ON conversations(farmer_id);
-
--- Farmer verifications indexes
-CREATE INDEX idx_farmer_verifications_farmer_id ON farmer_verifications(farmer_id);
-CREATE INDEX idx_farmer_verifications_status ON farmer_verifications(status);
+CREATE TABLE public.refund_requests (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  order_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  transaction_id uuid,
+  amount numeric NOT NULL CHECK (amount > 0::numeric),
+  reason text NOT NULL,
+  additional_details text,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'processing'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  processed_at timestamp with time zone,
+  processed_by uuid,
+  admin_notes text,
+  CONSTRAINT refund_requests_pkey PRIMARY KEY (id),
+  CONSTRAINT refund_requests_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT refund_requests_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT refund_requests_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id),
+  CONSTRAINT refund_requests_processed_by_fkey FOREIGN KEY (processed_by) REFERENCES public.users(id)
+);
+CREATE TABLE public.reports (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  reporter_id uuid,
+  target_id uuid NOT NULL,
+  description text DEFAULT ''::text,
+  admin_notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  status text DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'investigating'::text, 'resolved'::text, 'dismissed'::text])),
+  target_type text DEFAULT 'user'::text,
+  resolved_by uuid,
+  reporter_name text,
+  reporter_email text,
+  target_name text,
+  reason text,
+  resolved_at timestamp with time zone,
+  resolution text,
+  attachments ARRAY DEFAULT '{}'::text[],
+  CONSTRAINT reports_pkey PRIMARY KEY (id),
+  CONSTRAINT reports_reporter_id_fkey FOREIGN KEY (reporter_id) REFERENCES public.users(id),
+  CONSTRAINT reports_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.seller_reviews (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  seller_id uuid NOT NULL,
+  buyer_id uuid NOT NULL,
+  order_id uuid,
+  rating integer NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  review_text text,
+  review_type text DEFAULT 'general'::text CHECK (review_type = ANY (ARRAY['general'::text, 'communication'::text, 'shipping'::text, 'quality'::text])),
+  is_verified_purchase boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT seller_reviews_pkey PRIMARY KEY (id),
+  CONSTRAINT seller_reviews_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES public.users(id),
+  CONSTRAINT seller_reviews_buyer_id_fkey FOREIGN KEY (buyer_id) REFERENCES public.users(id),
+  CONSTRAINT seller_reviews_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+);
+CREATE TABLE public.seller_statistics (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  seller_id uuid NOT NULL UNIQUE,
+  total_products integer DEFAULT 0,
+  total_sales integer DEFAULT 0,
+  total_orders integer DEFAULT 0,
+  active_orders integer DEFAULT 0,
+  total_followers integer DEFAULT 0,
+  total_reviews integer DEFAULT 0,
+  average_rating numeric DEFAULT 0.00 CHECK (average_rating >= 0::numeric AND average_rating <= 5::numeric),
+  response_rate numeric DEFAULT 0.95 CHECK (response_rate >= 0::numeric AND response_rate <= 1::numeric),
+  average_response_hours integer DEFAULT 2,
+  shipping_rating numeric DEFAULT 4.8 CHECK (shipping_rating >= 0::numeric AND shipping_rating <= 5::numeric),
+  last_active_at timestamp with time zone DEFAULT now(),
+  stats_updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT seller_statistics_pkey PRIMARY KEY (id),
+  CONSTRAINT seller_statistics_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.store_settings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  seller_id uuid NOT NULL UNIQUE,
+  shipping_methods jsonb DEFAULT '["Standard Delivery", "Express Delivery", "Pickup Available"]'::jsonb,
+  payment_methods jsonb DEFAULT '{"GCash": true, "Credit Card": false, "Bank Transfer": false, "Cash on Delivery": true}'::jsonb,
+  auto_accept_orders boolean DEFAULT false,
+  vacation_mode boolean DEFAULT false,
+  vacation_message text,
+  min_order_amount numeric DEFAULT 0.00,
+  free_shipping_threshold numeric DEFAULT 500.00,
+  processing_time_days integer DEFAULT 1,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT store_settings_pkey PRIMARY KEY (id),
+  CONSTRAINT store_settings_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.subscription_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  tier text NOT NULL CHECK (tier = ANY (ARRAY['free'::text, 'premium'::text])),
+  amount numeric NOT NULL DEFAULT 0,
+  payment_method text DEFAULT 'manual'::text,
+  payment_reference text,
+  payment_proof_url text,
+  started_at timestamp with time zone NOT NULL DEFAULT now(),
+  expires_at timestamp with time zone NOT NULL,
+  status text DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'active'::text, 'expired'::text, 'cancelled'::text])),
+  notes text,
+  verified_by uuid,
+  verified_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT subscription_history_pkey PRIMARY KEY (id),
+  CONSTRAINT subscription_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT subscription_history_verified_by_fkey FOREIGN KEY (verified_by) REFERENCES public.users(id)
+);
+CREATE TABLE public.transactions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  order_id uuid NOT NULL,
+  order_number text,
+  type text NOT NULL CHECK (type = ANY (ARRAY['payment'::text, 'refund'::text, 'cancellation'::text])),
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'completed'::text, 'processing'::text, 'failed'::text, 'cancelled'::text])),
+  amount numeric NOT NULL CHECK (amount > 0::numeric),
+  payment_method text NOT NULL,
+  payment_screenshot_url text,
+  payment_reference text,
+  description text,
+  created_at timestamp with time zone DEFAULT now(),
+  completed_at timestamp with time zone,
+  refunded_by uuid,
+  refund_reason text,
+  refund_notes text,
+  CONSTRAINT transactions_pkey PRIMARY KEY (id),
+  CONSTRAINT transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT transactions_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT transactions_refunded_by_fkey FOREIGN KEY (refunded_by) REFERENCES public.users(id)
+);
+CREATE TABLE public.user_addresses (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  name character varying NOT NULL,
+  street_address text NOT NULL,
+  municipality character varying NOT NULL,
+  barangay character varying NOT NULL,
+  postal_code character varying,
+  is_default boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_addresses_pkey PRIMARY KEY (id),
+  CONSTRAINT user_addresses_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.user_favorites (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  product_id uuid NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  seller_id uuid CHECK (seller_id IS NULL),
+  followed_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_favorites_pkey PRIMARY KEY (id),
+  CONSTRAINT user_favorites_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT user_favorites_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id),
+  CONSTRAINT user_favorites_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.user_follows (
+  user_id uuid NOT NULL,
+  seller_id uuid NOT NULL,
+  followed_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_follows_pkey PRIMARY KEY (user_id, seller_id),
+  CONSTRAINT user_follows_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT user_follows_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.user_settings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL UNIQUE,
+  push_notifications boolean DEFAULT true,
+  email_notifications boolean DEFAULT true,
+  sms_notifications boolean DEFAULT false,
+  dark_mode boolean DEFAULT false,
+  language character varying DEFAULT 'en'::character varying,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_settings_pkey PRIMARY KEY (id),
+  CONSTRAINT user_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.users (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  email text NOT NULL UNIQUE,
+  full_name text NOT NULL,
+  phone_number text NOT NULL,
+  role USER-DEFINED NOT NULL DEFAULT 'buyer'::user_role,
+  municipality text,
+  barangay text,
+  street text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  phone character varying,
+  avatar_url text,
+  date_of_birth date,
+  gender character varying,
+  is_active boolean NOT NULL DEFAULT true,
+  store_name text,
+  store_description text DEFAULT 'Fresh agricultural products from our farm.'::text,
+  store_banner_url text,
+  store_logo_url text,
+  store_message text,
+  business_hours text DEFAULT 'Mon-Sun 6:00 AM - 6:00 PM'::text,
+  is_store_open boolean DEFAULT true,
+  pickup_enabled boolean DEFAULT false,
+  pickup_address text,
+  pickup_instructions text,
+  pickup_hours jsonb,
+  subscription_tier text DEFAULT 'free'::text CHECK (subscription_tier = ANY (ARRAY['free'::text, 'premium'::text])),
+  subscription_expires_at timestamp with time zone,
+  subscription_started_at timestamp with time zone,
+  pickup_addresses jsonb DEFAULT '[]'::jsonb,
+  wallet_balance numeric DEFAULT 0.00,
+  total_earnings numeric DEFAULT 0.00,
+  pending_earnings numeric DEFAULT 0.00,
+  gcash_number text,
+  gcash_name text,
+  bank_name text,
+  bank_account_number text,
+  bank_account_name text,
+  total_lifetime_earnings numeric DEFAULT 0.00,
+  CONSTRAINT users_pkey PRIMARY KEY (id)
+);

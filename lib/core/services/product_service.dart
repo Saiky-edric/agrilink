@@ -2,13 +2,20 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/product_model.dart';
+import '../models/product_with_distance.dart';
 import 'supabase_service.dart';
 import 'storage_service.dart';
+import 'location_service.dart';
+import 'address_service.dart';
+import 'auth_service.dart';
 
 class ProductService {
   static const String _cancelled = 'cancelled';
   final SupabaseService _supabase = SupabaseService.instance;
   final StorageService _storageService = StorageService.instance;
+  final LocationService _locationService = LocationService();
+  final AddressService _addressService = AddressService();
+  final AuthService _authService = AuthService();
 
   // Aggregate committed quantities for a set of product IDs (non-cancelled orders)
   Future<Map<String, int>> _getCommittedQuantities(Set<String> productIds) async {
@@ -858,6 +865,150 @@ class ProductService {
     } catch (e) {
       debugPrint('Error getting product count: $e');
       return 0;
+    }
+  }
+
+  /// Calculate distance from current user to product's farmer
+  Future<double?> getDistanceToProduct(ProductModel product) async {
+    try {
+      final currentUser = _authService.currentUser;
+      if (currentUser == null) return null;
+
+      // Get user's default address
+      final userAddress = await _addressService.getDefaultAddress(currentUser.id);
+      if (userAddress == null || !userAddress.hasCoordinates) {
+        return null;
+      }
+
+      // Get farmer's pickup address with coordinates
+      final farmerAddresses = await _addressService.getUserAddresses(product.farmerId);
+      if (farmerAddresses.isEmpty) {
+        return null;
+      }
+      
+      final farmerAddress = farmerAddresses.firstWhere(
+        (addr) => addr.hasCoordinates,
+        orElse: () => farmerAddresses.first,
+      );
+
+      if (!farmerAddress.hasCoordinates) {
+        return null;
+      }
+
+      // Calculate distance
+      return _locationService.calculateDistance(
+        lat1: userAddress.latitude!,
+        lon1: userAddress.longitude!,
+        lat2: farmerAddress.latitude!,
+        lon2: farmerAddress.longitude!,
+      );
+    } catch (e) {
+      debugPrint('Error calculating distance to product: $e');
+      return null;
+    }
+  }
+
+  /// Get products sorted by distance from current user
+  Future<List<ProductWithDistance>> getProductsSortedByDistance({
+    String? category,
+    String? searchQuery,
+    int limit = 20,
+  }) async {
+    try {
+      // Get all products first
+      final products = await getAvailableProducts(
+        category: category,
+        searchQuery: searchQuery,
+        limit: limit,
+      );
+
+      final currentUser = _authService.currentUser;
+      if (currentUser == null) {
+        // Return products without distance if not logged in
+        return products.map((p) => ProductWithDistance(product: p, distance: null)).toList();
+      }
+
+      // Get user's default address
+      final userAddress = await _addressService.getDefaultAddress(currentUser.id);
+      if (userAddress == null || !userAddress.hasCoordinates) {
+        // Return products without distance if no address
+        return products.map((p) => ProductWithDistance(product: p, distance: null)).toList();
+      }
+
+      // Get all farmer addresses in one query for efficiency
+      final farmerIds = products.map((p) => p.farmerId).toSet().toList();
+      final allFarmerAddresses = await _supabase.client
+          .from('user_addresses')
+          .select('*')
+          .inFilter('user_id', farmerIds);
+
+      // Group addresses by farmer
+      final addressesByFarmer = <String, List<Map<String, dynamic>>>{};
+      for (final addr in allFarmerAddresses) {
+        final farmerId = addr['user_id'] as String;
+        addressesByFarmer.putIfAbsent(farmerId, () => []).add(addr);
+      }
+
+      // Calculate distances
+      final productsWithDistance = <ProductWithDistance>[];
+      for (final product in products) {
+        final farmerAddrs = addressesByFarmer[product.farmerId] ?? [];
+        
+        // Find first address with coordinates
+        final farmerAddress = farmerAddrs.firstWhere(
+          (addr) => addr['latitude'] != null && addr['longitude'] != null,
+          orElse: () => <String, dynamic>{},
+        );
+
+        double? distance;
+        if (farmerAddress.isNotEmpty) {
+          distance = _locationService.calculateDistance(
+            lat1: userAddress.latitude!,
+            lon1: userAddress.longitude!,
+            lat2: farmerAddress['latitude'] as double,
+            lon2: farmerAddress['longitude'] as double,
+          );
+        }
+
+        productsWithDistance.add(ProductWithDistance(
+          product: product,
+          distance: distance,
+        ));
+      }
+
+      // Sort by distance (nulls last)
+      productsWithDistance.sort((a, b) {
+        if (a.distance == null && b.distance == null) return 0;
+        if (a.distance == null) return 1;
+        if (b.distance == null) return -1;
+        return a.distance!.compareTo(b.distance!);
+      });
+
+      return productsWithDistance;
+    } catch (e) {
+      debugPrint('Error getting products sorted by distance: $e');
+      throw Exception('Failed to get products by distance: $e');
+    }
+  }
+
+  /// Filter products within a specific radius (in kilometers)
+  Future<List<ProductWithDistance>> getProductsWithinRadius({
+    required double radiusKm,
+    String? category,
+  }) async {
+    try {
+      final productsWithDistance = await getProductsSortedByDistance(
+        category: category,
+        limit: 100, // Get more for filtering
+      );
+
+      // Filter by radius
+      return productsWithDistance
+          .where((pwd) => pwd.distance != null && pwd.distance! <= radiusKm)
+          .toList();
+    } catch (e) {
+      debugPrint('Error filtering products by radius: $e');
+      throw Exception('Failed to filter products by radius: $e');
     }
   }
 }

@@ -151,6 +151,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildOnboardingPage(OnboardingData data) {
+    // Check if this is the verified farmers screen
+    final isVerifiedFarmersScreen = data.lottieAsset.contains('onboarding_verified_farmers');
+    
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
@@ -158,12 +161,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Expanded(
             flex: 3,
             child: Center(
-              child: SizedBox(
-                width: double.infinity,
-                child: Lottie.asset(
-                  data.lottieAsset,
-                  fit: BoxFit.contain,
-                  repeat: true,
+              child: Transform.scale(
+                scale: isVerifiedFarmersScreen ? 1.5 : 1.0, // Make verified farmers 50% bigger
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Lottie.asset(
+                    data.lottieAsset,
+                    fit: BoxFit.contain,
+                    repeat: true,
+                  ),
                 ),
               ),
             ),

@@ -91,26 +91,16 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
       backgroundColor: AppTheme.backgroundWhite,
       appBar: AppBar(
         title: const Text(
-          'Farmer Profile',
+          'Profile',
           style: TextStyle(
+            fontSize: 18,
             fontWeight: FontWeight.w600,
             color: AppTheme.textPrimary,
           ),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
-          onPressed: () {
-            // Smart navigation - check if we can pop back
-            if (Navigator.of(context).canPop()) {
-              context.pop();
-            } else {
-              // If accessed directly, go to farmer dashboard
-              context.go(RouteNames.farmerDashboard);
-            }
-          },
-        ),
+        automaticallyImplyLeading: false,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -269,6 +259,54 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
             const SizedBox(height: AppSpacing.lg),
             
             _buildProfileSection('Business', [
+              _buildProfileOption(
+                icon: Icons.store,
+                title: 'Store Customization',
+                subtitle: 'Customize your store appearance',
+                onTap: () {
+                  context.push(RouteNames.storeCustomization);
+                },
+              ),
+              _buildProfileOption(
+                icon: Icons.settings_applications,
+                title: 'Store Settings',
+                subtitle: 'Configure store preferences',
+                onTap: () {
+                  context.push(RouteNames.storeSettings);
+                },
+              ),
+              _buildProfileOption(
+                icon: Icons.location_on,
+                title: 'Pickup Settings',
+                subtitle: 'Manage pickup locations',
+                onTap: () {
+                  context.push(RouteNames.pickupSettings);
+                },
+              ),
+              _buildProfileOption(
+                icon: Icons.account_balance_wallet,
+                title: 'Farmer Wallet',
+                subtitle: 'View balance and earnings',
+                onTap: () {
+                  context.push('/farmer/wallet');
+                },
+              ),
+              _buildProfileOption(
+                icon: Icons.payment,
+                title: 'Payment Settings',
+                subtitle: 'Set up GCash or Bank account',
+                onTap: () {
+                  context.push('/farmer/payment-settings');
+                },
+              ),
+              _buildProfileOption(
+                icon: Icons.money,
+                title: 'Request Payout',
+                subtitle: 'Withdraw your earnings',
+                onTap: () {
+                  context.push('/farmer/request-payout');
+                },
+              ),
               _buildProfileOption(
                 icon: Icons.inventory,
                 title: 'My Products',
@@ -472,6 +510,42 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
 
   // Get dynamic colors for icons - SUBTLE & MODERN
   Map<String, dynamic> _getIconColors(IconData icon) {
+    // Wallet - Soft Gold/Yellow
+    if (icon == Icons.account_balance_wallet) {
+      return {
+        'color': const Color(0xFFCDA34E),  // Muted gold
+        'gradient': LinearGradient(
+          colors: [
+            const Color(0xFFCDA34E).withOpacity(0.08),
+            const Color(0xFFD9B56F).withOpacity(0.08)
+          ],
+        ),
+      };
+    }
+    // Payment Settings - Soft Blue
+    if (icon == Icons.payment) {
+      return {
+        'color': const Color(0xFF6B8FB3),  // Muted blue
+        'gradient': LinearGradient(
+          colors: [
+            const Color(0xFF6B8FB3).withOpacity(0.08),
+            const Color(0xFF7FA3C2).withOpacity(0.08)
+          ],
+        ),
+      };
+    }
+    // Money/Payout - Soft Green
+    if (icon == Icons.money) {
+      return {
+        'color': const Color(0xFF6B9B7C),  // Muted green
+        'gradient': LinearGradient(
+          colors: [
+            const Color(0xFF6B9B7C).withOpacity(0.08),
+            const Color(0xFF7DAC8D).withOpacity(0.08)
+          ],
+        ),
+      };
+    }
     // Account icons - Soft Purple
     if (icon == Icons.person_outline) {
       return {

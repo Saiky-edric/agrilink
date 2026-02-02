@@ -15,12 +15,14 @@ class PayoutRequestDetailsScreen extends StatefulWidget {
   });
 
   @override
-  State<PayoutRequestDetailsScreen> createState() => _PayoutRequestDetailsScreenState();
+  State<PayoutRequestDetailsScreen> createState() =>
+      _PayoutRequestDetailsScreenState();
 }
 
-class _PayoutRequestDetailsScreenState extends State<PayoutRequestDetailsScreen> {
+class _PayoutRequestDetailsScreenState
+    extends State<PayoutRequestDetailsScreen> {
   final PayoutService _payoutService = PayoutService();
-  
+
   List<PayoutLog> _logs = [];
   List<Map<String, dynamic>> _orderBreakdown = [];
   bool _isLoadingDetails = true;
@@ -37,7 +39,8 @@ class _PayoutRequestDetailsScreenState extends State<PayoutRequestDetailsScreen>
       setState(() => _isLoadingDetails = true);
 
       final logs = await _payoutService.getPayoutLogs(widget.request.id);
-      final orders = await _payoutService.getOrdersForPayout(widget.request.farmerId);
+      final orders =
+          await _payoutService.getOrdersForPayout(widget.request.farmerId);
 
       setState(() {
         _logs = logs;
@@ -197,7 +200,8 @@ class _PayoutRequestDetailsScreenState extends State<PayoutRequestDetailsScreen>
     }
   }
 
-  Future<bool> _showConfirmDialog(String title, String message, Color color) async {
+  Future<bool> _showConfirmDialog(
+      String title, String message, Color color) async {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -219,9 +223,10 @@ class _PayoutRequestDetailsScreenState extends State<PayoutRequestDetailsScreen>
     return result ?? false;
   }
 
-  Future<String?> _showNotesDialog(String title, {String? hint, bool required = false}) async {
+  Future<String?> _showNotesDialog(String title,
+      {String? hint, bool required = false}) async {
     final controller = TextEditingController();
-    
+
     return await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -281,30 +286,30 @@ class _PayoutRequestDetailsScreenState extends State<PayoutRequestDetailsScreen>
               children: [
                 // Request Summary Card
                 _buildSummaryCard(),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Payment Details Card
                 _buildPaymentDetailsCard(),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Order Breakdown
                 if (_orderBreakdown.isNotEmpty) ...[
                   _buildOrderBreakdownCard(),
                   const SizedBox(height: 16),
                 ],
-                
+
                 // Activity Log
                 if (_logs.isNotEmpty) ...[
                   _buildActivityLogCard(),
                   const SizedBox(height: 16),
                 ],
-                
+
                 // Action Buttons
                 if (!widget.request.isCompleted && !widget.request.isRejected)
                   _buildActionButtons(),
-                
+
                 const SizedBox(height: 32),
               ],
             ),
@@ -330,9 +335,9 @@ class _PayoutRequestDetailsScreenState extends State<PayoutRequestDetailsScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.request.farmerStoreName ?? 
-                      widget.request.farmerName ?? 
-                      'Unknown Farmer',
+                      widget.request.farmerStoreName ??
+                          widget.request.farmerName ??
+                          'Unknown Farmer',
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -362,7 +367,8 @@ class _PayoutRequestDetailsScreenState extends State<PayoutRequestDetailsScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.payments, color: AppTheme.primaryGreen, size: 32),
+                const Icon(Icons.payments,
+                    color: AppTheme.primaryGreen, size: 32),
                 const SizedBox(width: 12),
                 Text(
                   '₱${widget.request.amount.toStringAsFixed(2)}',
@@ -526,7 +532,8 @@ class _PayoutRequestDetailsScreenState extends State<PayoutRequestDetailsScreen>
                 ),
                 if (canCopy)
                   IconButton(
-                    icon: Icon(Icons.copy, size: 18, color: Colors.grey.shade600),
+                    icon:
+                        Icon(Icons.copy, size: 18, color: Colors.grey.shade600),
                     onPressed: () => _copyToClipboard(value, label),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -570,7 +577,7 @@ class _PayoutRequestDetailsScreenState extends State<PayoutRequestDetailsScreen>
             final amount = (order['total_amount'] as num).toDouble();
             final commission = amount * 0.10;
             final farmerEarning = amount - commission;
-            
+
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(12),
@@ -753,7 +760,6 @@ class _PayoutRequestDetailsScreenState extends State<PayoutRequestDetailsScreen>
             ),
           ),
           const SizedBox(height: 16),
-          
           if (widget.request.isPending) ...[
             ElevatedButton.icon(
               onPressed: _isProcessing ? null : _approveRequest,
@@ -767,7 +773,6 @@ class _PayoutRequestDetailsScreenState extends State<PayoutRequestDetailsScreen>
             ),
             const SizedBox(height: 12),
           ],
-          
           if (widget.request.isProcessing) ...[
             ElevatedButton.icon(
               onPressed: _isProcessing ? null : _markAsCompleted,
@@ -781,7 +786,6 @@ class _PayoutRequestDetailsScreenState extends State<PayoutRequestDetailsScreen>
             ),
             const SizedBox(height: 12),
           ],
-          
           if (!widget.request.isCompleted && !widget.request.isRejected)
             OutlinedButton.icon(
               onPressed: _isProcessing ? null : _rejectRequest,

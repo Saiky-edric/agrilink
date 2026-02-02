@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	
+	<!-- Location Permissions -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Agrilink needs your location to show nearby farmers and calculate accurate delivery distances.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Agrilink needs your location to provide you with the best local farming products and accurate delivery information.</string>
 </dict>
 </plist>

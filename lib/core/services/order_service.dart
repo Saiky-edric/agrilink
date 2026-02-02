@@ -811,4 +811,108 @@ class OrderService {
       throw Exception('Failed to search orders: $e');
     }
   }
+
+  // Upload payment proof for GCash order
+  Future<void> uploadPaymentProof({
+    required String orderId,
+    required String paymentScreenshotUrl,
+    required String paymentReference,
+  }) async {
+    try {
+      final currentUser = _supabase.client.auth.currentUser;
+      if (currentUser == null) {
+        throw Exception('User not authenticated');
+      }
+
+      await _supabase.client.from('orders').update({
+        'payment_screenshot_url': paymentScreenshotUrl,
+        'payment_reference': paymentReference,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', orderId);
+
+      // Log the upload action
+      await _supabase.client.from('payment_verification_logs').insert({
+        'order_id': orderId,
+        'action': 'uploaded',
+        'performed_by': currentUser.id,
+        'notes': 'Payment proof uploaded by buyer',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      debugPrint('✅ Payment proof uploaded for order: $orderId');
+    } catch (e) {
+      throw Exception('Failed to upload payment proof: $e');
+    }
+  }
+
+  // Verify payment (for farmer/admin)
+  Future<void> verifyPayment({
+    required String orderId,
+    required bool approved,
+    String? notes,
+  }) async {
+    try {
+      final currentUser = _supabase.client.auth.currentUser;
+      if (currentUser == null) {
+        throw Exception('User not authenticated');
+      }
+
+      // Call the verify_order_payment function
+      await _supabase.client.rpc('verify_order_payment', params: {
+        'p_order_id': orderId,
+        'p_verified_by': currentUser.id,
+        'p_action': approved ? 'verified' : 'rejected',
+        'p_notes': notes,
+      });
+
+      debugPrint('✅ Payment ${approved ? 'verified' : 'rejected'} for order: $orderId');
+    } catch (e) {
+      throw Exception('Failed to verify payment: $e');
+    }
+  }
+
+  // Get pending payment verifications (for admin)
+  Future<List<Map<String, dynamic>>> getPendingPaymentVerifications() async {
+    try {
+      final response = await _supabase.client.rpc('get_pending_payment_verifications');
+      return List<Map<String, dynamic>>.from(response as List);
+    } catch (e) {
+      throw Exception('Failed to get pending payment verifications: $e');
+    }
+  }
+
+  // Get orders with pending payment verification (for farmer)
+  Future<List<OrderModel>> getOrdersWithPendingPayment(String farmerId) async {
+    try {
+      final response = await _supabase.client
+          .from('orders')
+          .select('''
+            *,
+            buyer:buyer_id (
+              id,
+              full_name,
+              phone_number
+            ),
+            items:order_items (
+              *,
+              product:product_id (
+                id,
+                name,
+                price,
+                unit,
+                cover_image_url
+              )
+            )
+          ''')
+          .eq('farmer_id', farmerId)
+          .eq('payment_method', 'gcash')
+          .eq('payment_verified', false)
+          .not('payment_screenshot_url', 'is', null)
+          .order('updated_at', ascending: false);
+
+      return response.map((item) => OrderModel.fromJson(item)).toList();
+    } catch (e) {
+      throw Exception('Failed to get orders with pending payment: $e');
+    }
+  }
 }

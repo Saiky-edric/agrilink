@@ -25,7 +25,7 @@ The **Manual Payout System** has been fully implemented for AgriLink MVP. This a
 **Features**:
 - ✅ Row Level Security (RLS) policies
 - ✅ Automatic triggers for logging
-- ✅ 10% platform commission built-in
+- ✅ 0% commission - Farmers keep 100% of earnings
 - ✅ Complete audit trail
 
 ### 2. **Data Models** ✅
@@ -147,7 +147,7 @@ static const String adminPayouts = '/admin/payouts';
 
 2. **Check Balance**
    - Open Wallet screen
-   - See available balance (completed orders - 10% commission)
+   - See available balance (100% of completed orders)
    - See pending earnings (orders in progress)
 
 3. **Request Payout**
@@ -197,14 +197,14 @@ static const String adminPayouts = '/admin/payouts';
 
 ## 💰 Business Logic
 
-### **Platform Commission: 10%**
+### **No Platform Commission - Farmers Get 100%**
 
 Example:
 - Farmer completes order: ₱1,000
-- Platform keeps: ₱100 (10%)
-- Farmer earns: ₱900
-- Farmer requests payout: ₱900
-- Admin sends: ₱900 to farmer
+- Platform keeps: ₱0 (0% commission)
+- Farmer earns: ₱1,000 (100%)
+- Farmer requests payout: ₱1,000
+- Admin sends: ₱1,000 to farmer
 
 ### **Minimum Payout: ₱100**
 
@@ -213,8 +213,8 @@ Prevents too many small transactions.
 ### **Balance Calculation**:
 
 ```
-Available Balance = Sum of (Completed Orders * 0.90) - Already Paid Out
-Pending Earnings = Sum of (In-Progress Orders * 0.90)
+Available Balance = Sum of (Completed Orders * 1.00) - Already Paid Out
+Pending Earnings = Sum of (In-Progress Orders * 1.00)
 Total Earnings = Available + Pending + Paid Out
 ```
 
@@ -390,7 +390,7 @@ You now have a **complete, transparent, manual payout system**!
 
 ### **What Makes It Transparent**:
 ✅ Farmers see available balance in real-time  
-✅ 10% commission clearly shown  
+✅ 0% commission - Farmers keep 100%  
 ✅ Complete payout history visible  
 ✅ Order breakdown shows which orders paid  
 ✅ Status updates at each step  

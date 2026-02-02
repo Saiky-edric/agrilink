@@ -1,6 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import '../models/user_model.dart';
 import '../config/environment.dart';
 import '../utils/error_handler.dart';
@@ -202,69 +201,6 @@ class AuthService {
     }
   }
 
-  // Facebook Sign-In
-  Future<UserModel?> signInWithFacebook() async {
-    try {
-      final LoginResult loginResult = await FacebookAuth.instance.login(
-        permissions: ['email', 'public_profile'],
-      );
-
-      if (loginResult.status == LoginStatus.success) {
-        final AccessToken accessToken = loginResult.accessToken!;
-
-        final response = await _supabase.client.auth.signInWithIdToken(
-          provider: OAuthProvider.facebook,
-          idToken: accessToken.token,
-        );
-
-        if (response.user != null) {
-          // Get user data from Facebook
-          final userData = await FacebookAuth.instance.getUserData();
-
-          // Check if user profile already exists with a role
-          final existingUser = await _supabase.users
-              .select()
-              .eq('id', response.user!.id)
-              .maybeSingle();
-
-          if (existingUser == null) {
-            // Create new user profile without role (will be set in role selection)
-            final userId = response.user?.id;
-            final userEmail = response.user?.email ?? userData['email'] as String? ?? '';
-            
-            if (userId == null || userEmail.isEmpty) {
-              throw Exception('Missing user ID or email from authentication response');
-            }
-            
-            await _supabase.users.insert({
-              'id': userId,
-              'email': userEmail,
-              'full_name': userData['name'] as String? ?? 'User',
-              'phone_number': '',
-              'role':
-                  'buyer', // Default to buyer, will be updated in role selection
-              'created_at': DateTime.now().toIso8601String(),
-            });
-
-            // Return null to indicate role selection is needed
-            return null;
-          } else {
-            // User exists with a role, return their profile
-            return await getCurrentUserProfile();
-          }
-        }
-      } else if (loginResult.status == LoginStatus.cancelled) {
-        throw Exception('Facebook sign-in was cancelled');
-      } else {
-        throw Exception('Facebook sign-in failed: ${loginResult.message}');
-      }
-
-      return null;
-    } catch (e) {
-      EnvironmentConfig.logError('Facebook sign-in error', e);
-      rethrow;
-    }
-  }
 
   // Sign out
   Future<void> signOut() async {

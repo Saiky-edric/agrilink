@@ -11,6 +11,7 @@ import '../../../core/models/address_model.dart';
 import '../../../core/router/route_names.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/loading_widgets.dart';
+import '../../../shared/widgets/modern_bottom_nav.dart';
 import 'my_reports_screen.dart';
 class BuyerProfileScreen extends StatefulWidget {
   const BuyerProfileScreen({super.key});
@@ -107,24 +108,14 @@ class _BuyerProfileScreenState extends State<BuyerProfileScreen> {
         title: const Text(
           'Profile',
           style: TextStyle(
+            fontSize: 18,
             fontWeight: FontWeight.w600,
             color: AppTheme.textPrimary,
           ),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
-          onPressed: () {
-            // Check if we can pop (came from another screen)
-            if (Navigator.of(context).canPop()) {
-              context.pop();
-            } else {
-              // If accessed directly (e.g., from bottom nav), go to home
-              context.go(RouteNames.buyerHome);
-            }
-          },
-        ),
+        automaticallyImplyLeading: false,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -293,6 +284,18 @@ class _BuyerProfileScreenState extends State<BuyerProfileScreen> {
                 onTap: () => context.push(RouteNames.buyerOrders),
               ),
               _buildProfileOption(
+                icon: Icons.payment_outlined,
+                title: 'Payment History',
+                subtitle: 'Track your spending and payments',
+                onTap: () => context.push(RouteNames.paymentHistory),
+              ),
+              _buildProfileOption(
+                icon: Icons.receipt_long_outlined,
+                title: 'Transaction History',
+                subtitle: 'View all payment transactions & refunds',
+                onTap: () => context.push(RouteNames.transactionHistory),
+              ),
+              _buildProfileOption(
                 icon: Icons.favorite_outline,
                 title: 'Wishlist',
                 subtitle: 'Your favorite products',
@@ -387,6 +390,7 @@ class _BuyerProfileScreenState extends State<BuyerProfileScreen> {
           ],
         ),
       ),
+      bottomNavigationBar: const ModernBottomNav(currentIndex: 4),
     );
   }
 

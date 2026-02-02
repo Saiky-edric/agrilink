@@ -664,7 +664,14 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Farmer Dashboard'),
+        title: const Text(
+          'Dashboard',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+          ),
+        ),
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
@@ -703,36 +710,6 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> {
           PopupMenuButton(
             icon: const Icon(Icons.more_vert),
             itemBuilder: (context) => [
-              PopupMenuItem(
-                child: const ListTile(
-                  leading: Icon(Icons.person),
-                  title: Text('Profile'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                onTap: () {
-                  context.push('/farmer/profile');
-                },
-              ),
-              PopupMenuItem(
-                child: const ListTile(
-                  leading: Icon(Icons.store),
-                  title: Text('Store Customization'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                onTap: () {
-                  context.push(RouteNames.storeCustomization);
-                },
-              ),
-              PopupMenuItem(
-                child: const ListTile(
-                  leading: Icon(Icons.settings),
-                  title: Text('Store Settings'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                onTap: () {
-                  context.push(RouteNames.storeSettings);
-                },
-              ),
               PopupMenuItem(
                 child: const ListTile(
                   leading: Icon(Icons.settings),
