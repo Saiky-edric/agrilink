@@ -47,6 +47,29 @@ class OrderModel extends Equatable {
   final String? refundStatus;
   final DateTime? refundedAt;
   final double? refundedAmount;
+  
+  // Individual status timestamps for precise tracking
+  final DateTime? acceptedAt;
+  final DateTime? toPackAt;
+  final DateTime? toDeliverAt;
+  final DateTime? readyForPickupAt;
+  final DateTime? cancelledAt;
+  
+  // Estimated delivery tracking
+  final DateTime? estimatedDeliveryAt;
+  final DateTime? estimatedPickupAt;
+  
+  // Real-time delivery tracking
+  final DateTime? deliveryStartedAt;
+  final double? deliveryLatitude;
+  final double? deliveryLongitude;
+  final DateTime? deliveryLastUpdatedAt;
+  
+  // Location coordinates
+  final double? farmerLatitude;
+  final double? farmerLongitude;
+  final double? buyerLatitude;
+  final double? buyerLongitude;
 
   const OrderModel({
     required this.id,
@@ -85,6 +108,21 @@ class OrderModel extends Equatable {
     this.refundStatus,
     this.refundedAt,
     this.refundedAmount,
+    this.acceptedAt,
+    this.toPackAt,
+    this.toDeliverAt,
+    this.readyForPickupAt,
+    this.cancelledAt,
+    this.estimatedDeliveryAt,
+    this.estimatedPickupAt,
+    this.deliveryStartedAt,
+    this.deliveryLatitude,
+    this.deliveryLongitude,
+    this.deliveryLastUpdatedAt,
+    this.farmerLatitude,
+    this.farmerLongitude,
+    this.buyerLatitude,
+    this.buyerLongitude,
   });
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
@@ -130,6 +168,21 @@ class OrderModel extends Equatable {
       refundStatus: json['refund_status'] as String?,
       refundedAt: json['refunded_at'] != null ? DateTime.parse(json['refunded_at']) : null,
       refundedAmount: (json['refunded_amount'] as num?)?.toDouble(),
+      acceptedAt: json['accepted_at'] != null ? DateTime.parse(json['accepted_at']) : null,
+      toPackAt: json['to_pack_at'] != null ? DateTime.parse(json['to_pack_at']) : null,
+      toDeliverAt: json['to_deliver_at'] != null ? DateTime.parse(json['to_deliver_at']) : null,
+      readyForPickupAt: json['ready_for_pickup_at'] != null ? DateTime.parse(json['ready_for_pickup_at']) : null,
+      cancelledAt: json['cancelled_at'] != null ? DateTime.parse(json['cancelled_at']) : null,
+      estimatedDeliveryAt: json['estimated_delivery_at'] != null ? DateTime.parse(json['estimated_delivery_at']) : null,
+      estimatedPickupAt: json['estimated_pickup_at'] != null ? DateTime.parse(json['estimated_pickup_at']) : null,
+      deliveryStartedAt: json['delivery_started_at'] != null ? DateTime.parse(json['delivery_started_at']) : null,
+      deliveryLatitude: (json['delivery_latitude'] as num?)?.toDouble(),
+      deliveryLongitude: (json['delivery_longitude'] as num?)?.toDouble(),
+      deliveryLastUpdatedAt: json['delivery_last_updated_at'] != null ? DateTime.parse(json['delivery_last_updated_at']) : null,
+      farmerLatitude: (json['farmer_latitude'] as num?)?.toDouble(),
+      farmerLongitude: (json['farmer_longitude'] as num?)?.toDouble(),
+      buyerLatitude: (json['buyer_latitude'] as num?)?.toDouble(),
+      buyerLongitude: (json['buyer_longitude'] as num?)?.toDouble(),
       buyerProfile: json['buyer'] != null ? UserModel.fromJson(json['buyer']) : null,
       farmerProfile: json['farmer'] != null ? UserModel.fromJson(json['farmer']) : null,
       items: (json['items'] ?? json['order_items']) != null
@@ -204,6 +257,24 @@ class OrderModel extends Equatable {
     String? refundStatus,
     DateTime? refundedAt,
     double? refundedAmount,
+    DateTime? acceptedAt,
+    DateTime? toPackAt,
+    DateTime? toDeliverAt,
+    DateTime? readyForPickupAt,
+    DateTime? cancelledAt,
+    DateTime? estimatedDeliveryAt,
+    DateTime? estimatedPickupAt,
+    DateTime? deliveryStartedAt,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
+    DateTime? deliveryLastUpdatedAt,
+    double? farmerLatitude,
+    double? farmerLongitude,
+    double? buyerLatitude,
+    double? buyerLongitude,
+    String? trackingNumber,
+    DateTime? deliveryDate,
+    String? deliveryNotes,
   }) {
     return OrderModel(
       id: id ?? this.id,
@@ -239,6 +310,24 @@ class OrderModel extends Equatable {
       refundStatus: refundStatus ?? this.refundStatus,
       refundedAt: refundedAt ?? this.refundedAt,
       refundedAmount: refundedAmount ?? this.refundedAmount,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
+      toPackAt: toPackAt ?? this.toPackAt,
+      toDeliverAt: toDeliverAt ?? this.toDeliverAt,
+      readyForPickupAt: readyForPickupAt ?? this.readyForPickupAt,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
+      estimatedDeliveryAt: estimatedDeliveryAt ?? this.estimatedDeliveryAt,
+      estimatedPickupAt: estimatedPickupAt ?? this.estimatedPickupAt,
+      deliveryStartedAt: deliveryStartedAt ?? this.deliveryStartedAt,
+      deliveryLatitude: deliveryLatitude ?? this.deliveryLatitude,
+      deliveryLongitude: deliveryLongitude ?? this.deliveryLongitude,
+      deliveryLastUpdatedAt: deliveryLastUpdatedAt ?? this.deliveryLastUpdatedAt,
+      farmerLatitude: farmerLatitude ?? this.farmerLatitude,
+      farmerLongitude: farmerLongitude ?? this.farmerLongitude,
+      buyerLatitude: buyerLatitude ?? this.buyerLatitude,
+      buyerLongitude: buyerLongitude ?? this.buyerLongitude,
+      trackingNumber: trackingNumber ?? this.trackingNumber,
+      deliveryDate: deliveryDate ?? this.deliveryDate,
+      deliveryNotes: deliveryNotes ?? this.deliveryNotes,
     );
   }
 
@@ -312,6 +401,21 @@ class OrderModel extends Equatable {
         refundStatus,
         refundedAt,
         refundedAmount,
+        acceptedAt,
+        toPackAt,
+        toDeliverAt,
+        readyForPickupAt,
+        cancelledAt,
+        estimatedDeliveryAt,
+        estimatedPickupAt,
+        deliveryStartedAt,
+        deliveryLatitude,
+        deliveryLongitude,
+        deliveryLastUpdatedAt,
+        farmerLatitude,
+        farmerLongitude,
+        buyerLatitude,
+        buyerLongitude,
       ];
 }
 

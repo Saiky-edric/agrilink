@@ -131,11 +131,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         final profile = UserModel(
           id: storeInfo['id'] ?? farmerId,
           email: '',
-          fullName: storeInfo['full_name'] ?? storeInfo['store_name'] ?? 'Unknown Farmer',
+          fullName: storeInfo['store_name'] ?? storeInfo['full_name'] ?? 'Unknown Store',
           phoneNumber: '',
           role: UserRole.farmer,
           municipality: storeInfo['municipality'],
           barangay: storeInfo['barangay'],
+          storeName: storeInfo['store_name'],
+          storeLogoUrl: storeInfo['store_logo_url'],
           createdAt: DateTime.now(),
         );
         profiles[farmerId] = profile;
@@ -152,11 +154,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               final profile = UserModel(
                 id: storeInfo['id'],
                 email: '',
-                fullName: storeInfo['full_name'] ?? 'Unknown Farmer',
+                fullName: storeInfo['store_name'] ?? storeInfo['full_name'] ?? 'Unknown Store',
                 phoneNumber: '',
                 role: UserRole.farmer,
                 municipality: storeInfo['municipality'],
                 barangay: storeInfo['barangay'],
+                storeName: storeInfo['store_name'],
+                storeLogoUrl: storeInfo['store_logo_url'],
                 createdAt: DateTime.now(),
               );
               profiles[farmerId] = profile;
@@ -464,7 +468,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   decoration: BoxDecoration(
                     color: AppTheme.surfaceGreen,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppTheme.accentGreen.withOpacity(0.3)),
+                    border: Border.all(color: AppTheme.accentGreen.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1076,8 +1080,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         children: [
           StoreGroupCard(
             farmerId: farmerId,
-            farmerName: farmerProfile?.fullName ?? 'Unknown Farmer',
-            farmerImage: null, // Profile images will be added later when the feature is implemented
+            farmerName: farmerProfile?.storeName ?? farmerProfile?.fullName ?? 'Unknown Store',
+            farmerImage: farmerProfile?.storeLogoUrl,
             items: items,
             onViewStore: () => _navigateToStore(farmerId),
           ),

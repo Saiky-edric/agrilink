@@ -7,6 +7,7 @@ class RouteNames {
   static const String signupBuyer = '/signup-buyer';
   static const String signupFarmer = '/signup-farmer';
   static const String forgotPassword = '/forgot-password';
+  static const String otpVerification = '/otp-verification';
   static const String addressSetup = '/address-setup';
   static const String socialRoleSelection = '/auth/social-role-selection';
   
@@ -65,6 +66,7 @@ class RouteNames {
   static const String farmerWallet = '/farmer/wallet';
   static const String paymentSettings = '/farmer/payment-settings';
   static const String requestPayout = '/farmer/request-payout';
+  static const String farmerSupportChat = '/farmer/support-chat';
   
   // Admin payment verification (moved from farmer)
   static const String adminPaymentVerification = '/admin/payment-verification';

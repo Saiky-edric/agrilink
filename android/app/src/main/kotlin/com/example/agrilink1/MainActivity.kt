@@ -1,4 +1,4 @@
-package com.example.agrlink1
+package com.example.agrilink1
 
 import io.flutter.embedding.android.FlutterActivity
 

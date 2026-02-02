@@ -3,8 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/order_model.dart';
+import '../../../core/models/product_model.dart';
 import '../../../core/services/order_service.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/product_service.dart';
 import '../../chat/services/chat_service.dart';
 import '../../../shared/widgets/loading_widgets.dart';
 import '../../../shared/widgets/error_widgets.dart';
@@ -32,6 +34,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   final AuthService _authService = AuthService();
   final ChatService _chatService = ChatService();
   final TransactionService _transactionService = TransactionService();
+  final ProductService _productService = ProductService();
   
   OrderModel? _order;
   RefundRequestModel? _refundRequest;
@@ -57,7 +60,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       
       // Load refund request if it exists
       RefundRequestModel? refundRequest;
-      if (order?.paymentMethod?.toLowerCase() == 'gcash' && order?.refundRequested == true) {
+      if (order?.refundRequested == true) {
         try {
           refundRequest = await _transactionService.getRefundRequestByOrderId(widget.orderId);
         } catch (e) {
@@ -70,6 +73,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         _refundRequest = refundRequest;
         _isLoading = false;
       });
+      
+      // Check refund eligibility after order loads
+      if (order != null) {
+        await _checkRefundEligibility();
+      }
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -283,41 +291,78 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     }
   }
 
+  // Refund eligibility state
+  Map<String, dynamic>? _refundEligibility;
+  bool _checkingEligibility = false;
+
+  Future<void> _checkRefundEligibility() async {
+    if (_order == null) return;
+    
+    setState(() => _checkingEligibility = true);
+    
+    try {
+      final eligibility = await _transactionService.checkRefundEligibility(_order!.id);
+      setState(() {
+        _refundEligibility = eligibility;
+        _checkingEligibility = false;
+      });
+    } catch (e) {
+      debugPrint('Error checking refund eligibility: $e');
+      setState(() => _checkingEligibility = false);
+    }
+  }
+
   bool _canCancelOrder() {
     if (_order == null) return false;
     
+    // STRICT POLICY: Use eligibility check if available
+    if (_refundEligibility != null) {
+      final eligible = _refundEligibility!['eligible'] as bool? ?? false;
+      final eligibilityType = _refundEligibility!['eligibility_type'] as String?;
+      
+      // Only allow cancel button for 'before_packing' scenarios
+      // Farmer fault scenarios should use "Request Refund" button
+      return eligible && eligibilityType == 'before_packing';
+    }
+    
+    // Fallback to legacy logic while eligibility is loading
     // OPTION B: Block cancellation for GCash orders with payment proof
-    // This protects buyers from losing money on unverified payments
     if (_order!.paymentMethod?.toLowerCase() == 'gcash') {
-      // Case 1: Payment verified → Must use refund process
       if (_order!.paymentVerified == true) {
-        return false; // Force "Request Refund" for verified payments
+        return false;
       }
-      
-      // Case 2: Payment proof uploaded but not verified yet → Block cancel
-      // Reason: Money might already be with farmer, need admin verification first
       if (_order!.paymentScreenshotUrl != null || _order!.paymentReference != null) {
-        return false; // Wait for verification, then use refund process
+        return false;
       }
-      
-      // Case 3: No payment proof uploaded yet → Allow cancel
-      // Reason: No money transferred yet, safe to cancel
       return _order!.farmerStatus == FarmerOrderStatus.newOrder ||
              _order!.farmerStatus == FarmerOrderStatus.accepted;
     }
     
-    // Allow cancel for COD/COP orders (no prepayment involved)
     return _order!.farmerStatus == FarmerOrderStatus.newOrder ||
            _order!.farmerStatus == FarmerOrderStatus.accepted;
   }
 
   bool _canRequestRefund() {
     if (_order == null) return false;
-    // Can request refund if:
-    // 1. Payment method is GCash
-    // 2. Payment is verified
-    // 3. Order is not completed or cancelled
-    // 4. No existing refund request
+    
+    // STRICT POLICY: Use eligibility check if available
+    if (_refundEligibility != null) {
+      final eligible = _refundEligibility!['eligible'] as bool? ?? false;
+      final eligibilityType = _refundEligibility!['eligibility_type'] as String?;
+      
+      // Show refund button for:
+      // 1. Any farmer fault scenario
+      // 2. GCash verified payments before packing (alternative to cancel)
+      if (!eligible || _order!.refundRequested) return false;
+      
+      return eligibilityType != null && (
+        eligibilityType.startsWith('farmer_fault') ||
+        (_order!.paymentMethod?.toLowerCase() == 'gcash' && 
+         _order!.paymentVerified == true)
+      );
+    }
+    
+    // Fallback to legacy logic
     return _order!.paymentMethod?.toLowerCase() == 'gcash' &&
            _order!.paymentVerified == true &&
            _order!.farmerStatus != FarmerOrderStatus.completed &&
@@ -328,15 +373,33 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   Future<void> _requestRefund() async {
     if (_order == null || _isRequestingRefund) return;
 
-    final refundReasons = [
-      'Order taking too long to process',
-      'Need to cancel due to changed plans',
-      'Found product elsewhere',
-      'Financial reasons',
-      'Farmer not responding',
-      'Product quality concerns',
-      'Other',
-    ];
+    // Determine refund reasons based on eligibility type
+    final eligibilityType = _refundEligibility?['eligibility_type'] as String?;
+    final isFarmerFault = eligibilityType?.startsWith('farmer_fault') ?? false;
+    
+    final List<String> refundReasons;
+    if (isFarmerFault) {
+      // Farmer fault scenarios - different reasons
+      refundReasons = [
+        'Delivery is taking too long',
+        'Product not delivered on time',
+        'Farmer not responding to messages',
+        'Order never arrived',
+        'Delivery deadline exceeded',
+        'Other delivery issue',
+      ];
+    } else {
+      // Regular refund scenarios
+      refundReasons = [
+        'Order taking too long to process',
+        'Need to cancel due to changed plans',
+        'Found product elsewhere',
+        'Financial reasons',
+        'Farmer not responding',
+        'Product quality concerns',
+        'Other',
+      ];
+    }
 
     String? selectedReason;
     final detailsController = TextEditingController();
@@ -649,6 +712,14 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
           const SizedBox(height: AppSpacing.lg),
 
+          // Detailed Order Timeline
+          DetailedOrderTimeline(
+            order: _order!,
+            showDuration: true,
+          ),
+
+          const SizedBox(height: AppSpacing.lg),
+
           // Payment Method
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -859,50 +930,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             const SizedBox(height: AppSpacing.lg),
           ],
 
-          // Info banner for GCash orders (explaining why cancel is blocked)
-          if (_order!.paymentMethod?.toLowerCase() == 'gcash' && 
-              !_canCancelOrder() &&
-              (_order!.farmerStatus == FarmerOrderStatus.newOrder ||
-               _order!.farmerStatus == FarmerOrderStatus.accepted)) ...[
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: _order!.paymentVerified == true 
-                    ? Colors.blue.shade50 
-                    : Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _order!.paymentVerified == true 
-                      ? Colors.blue.shade200 
-                      : Colors.orange.shade200,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.info_outline, 
-                    color: _order!.paymentVerified == true 
-                        ? Colors.blue.shade700 
-                        : Colors.orange.shade700, 
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _order!.paymentVerified == true
-                          ? 'Since your payment is verified, please use "Request Refund" below to cancel this order. Our admin will process your request within 24 hours.'
-                          : 'Your payment is being verified. Please wait for verification to complete before requesting a cancellation. This protects your money from being lost.',
-                      style: TextStyle(
-                        fontSize: 13, 
-                        color: _order!.paymentVerified == true 
-                            ? Colors.blue.shade700 
-                            : Colors.orange.shade700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          // Enhanced info banner with strict policy explanation
+          if (_refundEligibility != null && !_checkingEligibility) ...[
+            _buildRefundPolicyBanner(),
             const SizedBox(height: AppSpacing.md),
           ],
 
@@ -964,79 +994,132 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   }
 
   Widget _buildOrderItem(OrderItemModel item) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppTheme.cardWhite,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.lightGrey),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: AppTheme.lightGrey,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: (item.productImageUrl != null && item.productImageUrl!.isNotEmpty)
-                  ? Image.network(
-                      item.productImageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(
-                          Icons.image_not_supported,
-                          color: AppTheme.textSecondary,
-                        );
-                      },
-                    )
-                  : const Icon(
-                      Icons.image_not_supported,
-                      color: AppTheme.textSecondary,
-                    ),
-            ),
+    return FutureBuilder<ProductModel?>(
+      future: _productService.getProductById(item.productId),
+      builder: (context, snapshot) {
+        final product = snapshot.data;
+        final isUnavailable = product == null || product.isDeleted || product.isExpired;
+        
+        return Container(
+          margin: const EdgeInsets.only(bottom: AppSpacing.md),
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppTheme.cardWhite,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppTheme.lightGrey),
           ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.productName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: AppTheme.lightGrey,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: (item.productImageUrl != null && item.productImageUrl!.isNotEmpty)
+                          ? Image.network(
+                              item.productImageUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Icon(
+                                  Icons.image_not_supported,
+                                  color: AppTheme.textSecondary,
+                                );
+                              },
+                            )
+                          : const Icon(
+                              Icons.image_not_supported,
+                              color: AppTheme.textSecondary,
+                            ),
+                    ),
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '${item.quantity} x ₱${item.unitPrice.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.textSecondary,
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.productName,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          '${item.quantity} x ₱${item.unitPrice.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppTheme.textSecondary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                  overflow: TextOverflow.ellipsis,
+                  Text(
+                    '₱${(item.quantity * item.unitPrice).toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primaryGreen,
+                    ),
+                  ),
+                ],
+              ),
+              
+              // Show compact "Product Unavailable" badge if deleted or expired
+              if (isUnavailable) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            product == null 
+                                ? 'No longer available'
+                                : product.isExpired
+                                    ? 'Expired'
+                                    : 'Removed by seller',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
+            ],
           ),
-          Text(
-            '₱${(item.quantity * item.unitPrice).toStringAsFixed(2)}',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.primaryGreen,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1302,5 +1385,131 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       default:
         return Icons.info_outline;
     }
+  }
+
+  // Build refund policy banner based on eligibility
+  Widget _buildRefundPolicyBanner() {
+    if (_refundEligibility == null) return const SizedBox.shrink();
+    
+    final eligible = _refundEligibility!['eligible'] as bool? ?? false;
+    final reason = _refundEligibility!['reason'] as String? ?? '';
+    final eligibilityType = _refundEligibility!['eligibility_type'] as String?;
+    final farmerFault = _refundEligibility!['farmer_fault'] as bool? ?? false;
+    final isOverdue = _refundEligibility!['is_overdue'] as bool? ?? false;
+    
+    Color bannerColor;
+    Color borderColor;
+    IconData icon;
+    String title;
+    String message;
+    
+    if (eligible) {
+      // Eligible for refund - show info about why
+      if (eligibilityType == 'before_packing') {
+        // Can cancel freely before farmer starts packing
+        bannerColor = Colors.green.shade50;
+        borderColor = Colors.green.shade200;
+        icon = Icons.check_circle_outline;
+        title = 'Cancellation Available';
+        message = 'You can cancel this order freely. The farmer hasn\'t started preparing your order yet.';
+      } else if (eligibilityType?.startsWith('farmer_fault') ?? false) {
+        // Eligible due to farmer fault
+        bannerColor = Colors.orange.shade50;
+        borderColor = Colors.orange.shade200;
+        icon = Icons.warning_amber_rounded;
+        title = 'Refund Available - Delivery Issue';
+        
+        if (isOverdue) {
+          message = '⏰ This order is overdue. You can request a refund due to delayed delivery.';
+        } else {
+          message = '⚠️ A delivery issue has been detected. You are eligible to request a refund.';
+        }
+      } else {
+        // Other eligible scenarios
+        bannerColor = Colors.blue.shade50;
+        borderColor = Colors.blue.shade200;
+        icon = Icons.info_outline;
+        title = 'Refund Available';
+        message = reason;
+      }
+    } else {
+      // Not eligible for refund
+      if (_order!.farmerStatus == FarmerOrderStatus.completed) {
+        return const SizedBox.shrink(); // Don't show banner for completed orders
+      }
+      
+      bannerColor = Colors.red.shade50;
+      borderColor = Colors.red.shade200;
+      icon = Icons.block;
+      title = 'Cancellation Not Allowed';
+      message = 'The farmer has started preparing your order. Cancellation is no longer possible.';
+    }
+    
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: bannerColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: borderColor, size: 24),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: borderColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            style: TextStyle(
+              fontSize: 13,
+              color: borderColor,
+              height: 1.4,
+            ),
+          ),
+          
+          // Show additional info for farmer fault cases
+          if (farmerFault && eligibilityType?.startsWith('farmer_fault') == true) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: borderColor),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info, color: borderColor, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Use "Request Refund" button below. Our admin will review your case within 24 hours.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: borderColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }

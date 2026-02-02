@@ -6,6 +6,7 @@ import '../models/order_model.dart';
 import '../models/cart_model.dart';
 import 'supabase_service.dart';
 import 'notification_helper.dart';
+import 'notification_service.dart';
 
 class OrderService {
  // J&T incremental single-parcel fee calculator used by checkout and order creation
@@ -42,6 +43,7 @@ class OrderService {
  }
   final SupabaseService _supabase = SupabaseService.instance;
   final NotificationHelper _notificationHelper = NotificationHelper();
+  final NotificationService _notificationService = NotificationService();
 
   // Get orders for a specific farmer
   Future<List<OrderModel>> getFarmerOrders({
@@ -164,7 +166,7 @@ class OrderService {
    }
  }
 
- // Update order status
+ // Update order status with automatic timestamp tracking
  Future<OrderModel> updateOrderStatus({
     required String orderId,
     FarmerOrderStatus? farmerStatus,
@@ -175,16 +177,6 @@ class OrderService {
       debugPrint('🔍 DEBUG: Order ID: $orderId');
       debugPrint('🔍 DEBUG: Farmer Status: $farmerStatus');
       debugPrint('🔍 DEBUG: Buyer Status: $buyerStatus');
-      // Pre-check for stock deduction
-      final current = await _supabase.client
-          .from('orders')
-          .select('farmer_status, buyer_status')
-          .eq('id', orderId)
-          .maybeSingle();
-      final String? curFs = current?['farmer_status'] as String?;
-      final String? curBs = current?['buyer_status'] as String?;
-      final bool alreadyCompleted = (curFs == FarmerOrderStatus.completed.name) || (curBs == BuyerOrderStatus.completed.name);
-      final bool willComplete = (farmerStatus == FarmerOrderStatus.completed) || (buyerStatus == BuyerOrderStatus.completed);
       
       final updateData = <String, dynamic>{
         'updated_at': DateTime.now().toIso8601String(),
@@ -193,7 +185,6 @@ class OrderService {
       if (farmerStatus != null) {
         final statusString = farmerStatus.name;
         debugPrint('🔍 DEBUG: Converting farmer status enum to string: "$statusString"');
-        debugPrint('🔍 DEBUG: Enum toString: ${farmerStatus.toString()}');
         
         // Validation check - includes readyForPickup for pickup orders
         final validStatuses = ['newOrder', 'accepted', 'toPack', 'toDeliver', 'readyForPickup', 'completed', 'cancelled'];
@@ -205,10 +196,31 @@ class OrderService {
         updateData['farmer_status'] = statusString;
         debugPrint('✅ DEBUG: Farmer status added to update data: "$statusString"');
         
-        // If farmer completes the order, update buyer status too
-        if (farmerStatus == FarmerOrderStatus.completed) {
-          updateData['buyer_status'] = BuyerOrderStatus.completed.name;
-          updateData['completed_at'] = DateTime.now().toIso8601String();
+        // Set individual status timestamps
+        final now = DateTime.now().toIso8601String();
+        switch (farmerStatus) {
+          case FarmerOrderStatus.accepted:
+            updateData['accepted_at'] = now;
+            break;
+          case FarmerOrderStatus.toPack:
+            updateData['to_pack_at'] = now;
+            break;
+          case FarmerOrderStatus.toDeliver:
+            updateData['to_deliver_at'] = now;
+            updateData['delivery_started_at'] = now;
+            break;
+          case FarmerOrderStatus.readyForPickup:
+            updateData['ready_for_pickup_at'] = now;
+            break;
+          case FarmerOrderStatus.cancelled:
+            updateData['cancelled_at'] = now;
+            break;
+          case FarmerOrderStatus.completed:
+            updateData['completed_at'] = now;
+            updateData['buyer_status'] = BuyerOrderStatus.completed.name;
+            break;
+          default:
+            break;
         }
       }
 
@@ -227,29 +239,84 @@ class OrderService {
       debugPrint('🔍 DEBUG: === FINAL UPDATE DATA ===');
       debugPrint('🔍 DEBUG: Update data being sent to database: $updateData');
       debugPrint('🔍 DEBUG: Order ID: $orderId');
+      
       // Use RPC to atomically update status and deduct stock
       await _supabase.client.rpc('complete_order_and_deduct', params: {
         'p_order_id': orderId,
         'p_buyer_status': buyerStatus?.name,
         'p_farmer_status': farmerStatus?.name,
       });
-      // Refresh order after RPC
+      
+      // Apply timestamp updates separately (RPC doesn't handle these)
+      if (updateData.length > 1) { // More than just updated_at
+        await _supabase.client
+            .from('orders')
+            .update(updateData)
+            .eq('id', orderId);
+      }
+      
+      // Refresh order after updates
       final response = await _supabase.client
           .from('orders')
-          .select('*')
+          .select('''
+            *,
+            buyer:buyer_id(id, full_name),
+            farmer:farmer_id(id, full_name, store_name)
+          ''')
           .eq('id', orderId)
           .single();
-      debugPrint('✅ DEBUG: RPC + refresh successful!');
+      debugPrint('✅ DEBUG: Order status updated with timestamps!');
       debugPrint('🔍 DEBUG: Database response: $response');
-      return OrderModel.fromJson(response);
-      // Legacy direct update block removed; RPC above returns fresh order
-     // (No-op)
+      
+      final updatedOrder = OrderModel.fromJson(response);
+      
+      // Send notifications for status changes
+      await _sendStatusChangeNotification(updatedOrder, farmerStatus, buyerStatus);
+      
+      return updatedOrder;
     } catch (e) {
       throw Exception('Failed to update order status: $e');
     }
   }
 
+  // Check refund eligibility with strict policy
+  Future<Map<String, dynamic>> checkRefundEligibility(String orderId) async {
+    try {
+      final response = await _supabase.client
+          .rpc('check_refund_eligibility', params: {'p_order_id': orderId});
+      
+      return Map<String, dynamic>.from(response as Map);
+    } catch (e) {
+      debugPrint('❌ Failed to check refund eligibility: $e');
+      return {
+        'eligible': false,
+        'reason': 'Failed to check eligibility: $e',
+        'eligibility_type': null,
+      };
+    }
+  }
+
+  // Report farmer fault (for admin or automatic system)
+  Future<void> reportFarmerFault({
+    required String orderId,
+    required String faultReason,
+    String? reportedBy,
+  }) async {
+    try {
+      final currentUser = _supabase.client.auth.currentUser;
+      await _supabase.client.rpc('report_farmer_fault', params: {
+        'p_order_id': orderId,
+        'p_fault_reason': faultReason,
+        'p_reported_by': reportedBy ?? currentUser?.id,
+      });
+      debugPrint('✅ Farmer fault reported for order: $orderId');
+    } catch (e) {
+      throw Exception('Failed to report farmer fault: $e');
+    }
+  }
+
   // Cancel order (only allowed before farmer starts packing)
+  // STRICT POLICY: Cannot cancel after toPack unless farmer is at fault
   Future<void> cancelOrder({
     required String orderId,
     String? cancelReason,
@@ -259,25 +326,32 @@ class OrderService {
       debugPrint('🔍 DEBUG: Order ID: $orderId');
       debugPrint('🔍 DEBUG: Cancel reason: $cancelReason');
 
-      // First, get the current order to check status
+      // First, check refund eligibility using strict policy
+      final eligibility = await checkRefundEligibility(orderId);
+      
+      if (eligibility['eligible'] != true) {
+        throw Exception(eligibility['reason'] ?? 'Cannot cancel this order');
+      }
+
+      // Get the current order to check status
       final currentOrder = await _supabase.client
           .from('orders')
-          .select('farmer_status, buyer_id, farmer_id')
+          .select('farmer_status, buyer_id, farmer_id, farmer_fault')
           .eq('id', orderId)
           .single();
 
       final currentStatus = currentOrder['farmer_status'] as String;
+      final farmerFault = currentOrder['farmer_fault'] as bool? ?? false;
+      
       debugPrint('🔍 DEBUG: Current farmer status: $currentStatus');
-
-      // Check if cancellation is allowed
-      if (currentStatus != 'newOrder' && currentStatus != 'accepted') {
-        throw Exception('Cannot cancel order. Farmer has already started preparing your order.');
-      }
+      debugPrint('🔍 DEBUG: Farmer fault: $farmerFault');
+      debugPrint('🔍 DEBUG: Eligibility reason: ${eligibility['eligibility_type']}');
 
       // Update order to cancelled status
       final updateData = {
         'farmer_status': FarmerOrderStatus.cancelled.name,
         'buyer_status': BuyerOrderStatus.cancelled.name,
+        'cancelled_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       };
 
@@ -294,13 +368,18 @@ class OrderService {
 
       // Send notification to farmer with cancellation reason
       try {
-        final notificationMessage = cancelReason != null && cancelReason.isNotEmpty
-            ? 'A buyer has cancelled their order. Reason: $cancelReason'
-            : 'A buyer has cancelled their order.';
+        String notificationMessage;
+        if (farmerFault) {
+          notificationMessage = 'Order cancelled due to delivery issue. Reason: ${cancelReason ?? 'Buyer requested cancellation'}';
+        } else {
+          notificationMessage = cancelReason != null && cancelReason.isNotEmpty
+              ? 'A buyer has cancelled their order. Reason: $cancelReason'
+              : 'A buyer has cancelled their order.';
+        }
             
         await _supabase.client.from('notifications').insert({
           'user_id': currentOrder['farmer_id'],
-          'title': 'Order Cancelled',
+          'title': farmerFault ? 'Order Cancelled - Delivery Issue' : 'Order Cancelled',
           'message': notificationMessage,
           'type': 'orderUpdate',
           'related_id': orderId,
@@ -367,7 +446,7 @@ class OrderService {
     }
   }
 
-  // Update order status with optional tracking info
+  // Update order status with optional tracking info and automatic timestamps
   Future<OrderModel> updateOrderStatusWithTracking({
     required String orderId,
     FarmerOrderStatus? farmerStatus,
@@ -386,12 +465,13 @@ class OrderService {
       final updateData = <String, dynamic>{
         'updated_at': DateTime.now().toIso8601String(),
       };
+      final now = DateTime.now().toIso8601String();
 
       if (farmerStatus != null) {
         final statusString = farmerStatus.name;
         debugPrint('🔍 DEBUG: Converting farmer status enum to string: "$statusString"');
         
-        // Validation check - includes readyForPickup for pickup orders
+        // Validation check
         final validStatuses = ['newOrder', 'accepted', 'toPack', 'toDeliver', 'readyForPickup', 'completed', 'cancelled'];
         if (!validStatuses.contains(statusString)) {
           debugPrint('❌ DEBUG: INVALID STATUS DETECTED: "$statusString"');
@@ -399,31 +479,46 @@ class OrderService {
         }
         
         updateData['farmer_status'] = statusString;
-        debugPrint('✅ DEBUG: Farmer status added to update data: "$statusString"');
-
-        // Auto-generate tracking number when marking as toDeliver
-        if (farmerStatus == FarmerOrderStatus.toDeliver && trackingNumber == null) {
-          final autoTrackingNumber = _generateTrackingNumber();
-          updateData['tracking_number'] = autoTrackingNumber;
-          debugPrint('📦 DEBUG: Auto-generated tracking number: $autoTrackingNumber');
-        }
-
-        // If farmer completes the order, update buyer status too
-        if (farmerStatus == FarmerOrderStatus.completed) {
-          updateData['buyer_status'] = BuyerOrderStatus.completed.name;
-          updateData['completed_at'] = DateTime.now().toIso8601String();
+        
+        // Set individual status timestamps
+        switch (farmerStatus) {
+          case FarmerOrderStatus.accepted:
+            updateData['accepted_at'] = now;
+            break;
+          case FarmerOrderStatus.toPack:
+            updateData['to_pack_at'] = now;
+            break;
+          case FarmerOrderStatus.toDeliver:
+            updateData['to_deliver_at'] = now;
+            updateData['delivery_started_at'] = now;
+            // Auto-generate tracking number
+            if (trackingNumber == null) {
+              final autoTrackingNumber = _generateTrackingNumber();
+              updateData['tracking_number'] = autoTrackingNumber;
+              debugPrint('📦 DEBUG: Auto-generated tracking number: $autoTrackingNumber');
+            }
+            break;
+          case FarmerOrderStatus.readyForPickup:
+            updateData['ready_for_pickup_at'] = now;
+            break;
+          case FarmerOrderStatus.cancelled:
+            updateData['cancelled_at'] = now;
+            break;
+          case FarmerOrderStatus.completed:
+            updateData['completed_at'] = now;
+            updateData['buyer_status'] = BuyerOrderStatus.completed.name;
+            break;
+          default:
+            break;
         }
       }
 
       if (buyerStatus != null) {
-        final buyerStatusString = buyerStatus.name;
-        debugPrint('🔍 DEBUG: Adding buyer status: "$buyerStatusString"');
-        updateData['buyer_status'] = buyerStatusString;
+        updateData['buyer_status'] = buyerStatus.name;
         
-        // If buyer completes/receives the order, update farmer status too
         if (buyerStatus == BuyerOrderStatus.completed) {
           updateData['farmer_status'] = FarmerOrderStatus.completed.name;
-          updateData['completed_at'] = DateTime.now().toIso8601String();
+          updateData['completed_at'] = now;
         }
       }
 
@@ -434,6 +529,7 @@ class OrderService {
 
       if (deliveryDate != null) {
         updateData['delivery_date'] = deliveryDate.toIso8601String().split('T')[0];
+        updateData['estimated_delivery_at'] = deliveryDate.toIso8601String();
       }
 
       if (deliveryNotes != null && deliveryNotes.isNotEmpty) {
@@ -441,7 +537,7 @@ class OrderService {
       }
 
       debugPrint('🔍 DEBUG: === FINAL UPDATE DATA ===');
-      debugPrint('🔍 DEBUG: Update data being sent to database: $updateData');
+      debugPrint('🔍 DEBUG: Update data: $updateData');
 
       // 1) Atomically update statuses and deduct stock if completing
       await _supabase.client.rpc('complete_order_and_deduct', params: {
@@ -450,33 +546,34 @@ class OrderService {
         'p_farmer_status': farmerStatus?.name,
       });
 
-      // 2) Apply tracking fields if provided
-      if (trackingNumber != null || deliveryDate != null || (deliveryNotes != null && deliveryNotes.isNotEmpty)) {
-        final trackingUpdate = <String, dynamic>{
-          'updated_at': DateTime.now().toIso8601String(),
-        };
-        if (trackingNumber != null) trackingUpdate['tracking_number'] = trackingNumber;
-        if (deliveryDate != null) trackingUpdate['delivery_date'] = deliveryDate.toIso8601String().split('T')[0];
-        if (deliveryNotes != null && deliveryNotes.isNotEmpty) trackingUpdate['delivery_notes'] = deliveryNotes;
-
+      // 2) Apply all tracking and timestamp fields
+      if (updateData.length > 1) {
         await _supabase.client
             .from('orders')
-            .update(trackingUpdate)
+            .update(updateData)
             .eq('id', orderId);
       }
 
-      // 3) Refresh and log
+      // 3) Refresh order
       final response = await _supabase.client
           .from('orders')
-          .select('*')
+          .select('''
+            *,
+            buyer:buyer_id(id, full_name),
+            farmer:farmer_id(id, full_name, store_name)
+          ''')
           .eq('id', orderId)
           .single();
-      debugPrint('✅ DEBUG: RPC + tracking update successful!');
-      debugPrint('🔍 DEBUG: Database response: $response');
+      debugPrint('✅ DEBUG: Order updated with tracking and timestamps!');
 
-      return OrderModel.fromJson(response);
+      final updatedOrder = OrderModel.fromJson(response);
+      
+      // Send notifications for status changes
+      await _sendStatusChangeNotification(updatedOrder, farmerStatus, buyerStatus);
+
+      return updatedOrder;
     } catch (e) {
-      debugPrint('❌ DEBUG: Update failed with error: $e');
+      debugPrint('❌ DEBUG: Update failed: $e');
       throw Exception('Failed to update order status: $e');
     }
   }
@@ -914,5 +1011,109 @@ class OrderService {
     } catch (e) {
       throw Exception('Failed to get orders with pending payment: $e');
     }
+  }
+
+  /// Send notification when order status changes
+  Future<void> _sendStatusChangeNotification(
+    OrderModel order,
+    FarmerOrderStatus? newFarmerStatus,
+    BuyerOrderStatus? newBuyerStatus,
+  ) async {
+    try {
+      // Determine who to notify and what message to send
+      if (newFarmerStatus != null) {
+        // Farmer changed status - notify buyer
+        await _notifyBuyerOfStatusChange(order, newFarmerStatus);
+      }
+
+      if (newBuyerStatus != null) {
+        // Buyer changed status - notify farmer
+        await _notifyFarmerOfStatusChange(order, newBuyerStatus);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Failed to send status change notification: $e');
+      // Don't throw - notifications shouldn't break the order flow
+    }
+  }
+
+  /// Notify buyer of order status change
+  Future<void> _notifyBuyerOfStatusChange(
+    OrderModel order,
+    FarmerOrderStatus newStatus,
+  ) async {
+    String title;
+    String message;
+    Map<String, dynamic>? data = {'order_id': order.id};
+
+    switch (newStatus) {
+      case FarmerOrderStatus.accepted:
+        title = 'Order Confirmed';
+        message = '${order.farmerProfile?.storeName ?? "The farmer"} has accepted your order!';
+        break;
+      case FarmerOrderStatus.toPack:
+        title = 'Order Being Prepared';
+        message = 'Your order is being packed and will be ready soon.';
+        break;
+      case FarmerOrderStatus.toDeliver:
+        title = 'Order Out for Delivery';
+        message = 'Your order is on the way! Track it in real-time.';
+        if (order.trackingNumber != null) {
+          message += ' Tracking: ${order.trackingNumber}';
+          data['tracking_number'] = order.trackingNumber;
+        }
+        break;
+      case FarmerOrderStatus.readyForPickup:
+        title = 'Order Ready for Pickup';
+        message = 'Your order is ready! Pick it up at: ${order.pickupAddress ?? "the pickup location"}';
+        break;
+      case FarmerOrderStatus.completed:
+        title = 'Order Delivered';
+        message = 'Your order has been delivered! Don\'t forget to leave a review.';
+        break;
+      case FarmerOrderStatus.cancelled:
+        title = 'Order Cancelled';
+        message = 'Your order has been cancelled by the farmer.';
+        break;
+      default:
+        return; // Don't send notification for other statuses
+    }
+
+    await _notificationService.sendNotification(
+      userId: order.buyerId,
+      title: title,
+      message: message,
+      type: 'orderUpdate',
+      data: data,
+    );
+  }
+
+  /// Notify farmer of order status change from buyer
+  Future<void> _notifyFarmerOfStatusChange(
+    OrderModel order,
+    BuyerOrderStatus newStatus,
+  ) async {
+    String title;
+    String message;
+
+    switch (newStatus) {
+      case BuyerOrderStatus.completed:
+        title = 'Order Completed';
+        message = '${order.buyerProfile?.fullName ?? "The buyer"} has confirmed receipt of the order.';
+        break;
+      case BuyerOrderStatus.cancelled:
+        title = 'Order Cancelled';
+        message = '${order.buyerProfile?.fullName ?? "The buyer"} has cancelled their order.';
+        break;
+      default:
+        return; // Don't send notification for other statuses
+    }
+
+    await _notificationService.sendNotification(
+      userId: order.farmerId,
+      title: title,
+      message: message,
+      type: 'orderUpdate',
+      data: {'order_id': order.id},
+    );
   }
 }

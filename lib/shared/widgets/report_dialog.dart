@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/report_service.dart';
+import '../../core/services/storage_service.dart';
 import 'custom_button.dart';
 
 class ReportDialog extends StatefulWidget {
@@ -21,10 +24,14 @@ class ReportDialog extends StatefulWidget {
 
 class _ReportDialogState extends State<ReportDialog> {
   final ReportService _reportService = ReportService();
+  final StorageService _storageService = StorageService.instance;
+  final ImagePicker _imagePicker = ImagePicker();
   final TextEditingController _descriptionController = TextEditingController();
   
   String? _selectedReason;
   bool _isSubmitting = false;
+  List<File> _selectedImages = [];
+  List<String> _uploadedImageUrls = [];
 
   final Map<String, List<String>> _reportReasons = {
     'product': [
@@ -44,10 +51,13 @@ class _ReportDialogState extends State<ReportDialog> {
       'Other',
     ],
     'order': [
+      'Product never delivered',
+      'Delivery is very late',
+      'Product quality issues (rotten/damaged)',
+      'Wrong items delivered',
+      'Farmer not responding',
+      'Incomplete order',
       'Payment issue',
-      'Delivery problem',
-      'Product quality mismatch',
-      'Seller unresponsive',
       'Fraudulent transaction',
       'Other',
     ],
@@ -57,6 +67,58 @@ class _ReportDialogState extends State<ReportDialog> {
   void dispose() {
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImages() async {
+    try {
+      final List<XFile> images = await _imagePicker.pickMultiImage(
+        imageQuality: 80,
+      );
+      
+      if (images.isEmpty) return;
+      
+      // Limit to 3 images
+      final imagesToAdd = images.take(3 - _selectedImages.length).toList();
+      
+      setState(() {
+        _selectedImages.addAll(imagesToAdd.map((xFile) => File(xFile.path)));
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick images: $e'),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
+      }
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _selectedImages.removeAt(index);
+    });
+  }
+
+  Future<void> _uploadImages() async {
+    if (_selectedImages.isEmpty) return;
+
+    for (final imageFile in _selectedImages) {
+      try {
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final fileName = 'reports/$timestamp-${imageFile.path.split('/').last}';
+        final imageUrl = await _storageService.uploadImage(
+          bucket: 'reports',
+          fileName: fileName,
+          file: imageFile,
+        );
+        _uploadedImageUrls.add(imageUrl);
+      } catch (e) {
+        debugPrint('Failed to upload image: $e');
+        // Continue with other images
+      }
+    }
   }
 
   Future<void> _submitReport() async {
@@ -83,11 +145,15 @@ class _ReportDialogState extends State<ReportDialog> {
     setState(() => _isSubmitting = true);
 
     try {
+      // Upload images first if any
+      await _uploadImages();
+
       await _reportService.submitReport(
         targetId: widget.targetId,
         type: widget.targetType,
         reason: _selectedReason!,
         description: _descriptionController.text.trim(),
+        imageUrls: _uploadedImageUrls.isNotEmpty ? _uploadedImageUrls : null,
       );
 
       if (mounted) {
@@ -242,30 +308,139 @@ class _ReportDialogState extends State<ReportDialog> {
 
               const SizedBox(height: AppSpacing.lg),
 
+              // Photo Upload Section (for order reports)
+              if (widget.targetType == 'order') ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Add photos (optional)',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      '${_selectedImages.length}/3',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                
+                // Image preview grid
+                if (_selectedImages.isNotEmpty)
+                  Container(
+                    height: 100,
+                    margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _selectedImages.length,
+                      itemBuilder: (context, index) {
+                        return Stack(
+                          children: [
+                            Container(
+                              width: 100,
+                              height: 100,
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppTheme.lightGrey),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(
+                                  _selectedImages[index],
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 4,
+                              right: 12,
+                              child: GestureDetector(
+                                onTap: () => _removeImage(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.errorRed,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 16,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                
+                // Add photo button
+                if (_selectedImages.length < 3)
+                  OutlinedButton.icon(
+                    onPressed: _isSubmitting ? null : _pickImages,
+                    icon: const Icon(Icons.add_photo_alternate),
+                    label: const Text('Add Photos'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.primaryGreen,
+                      side: BorderSide(color: AppTheme.primaryGreen.withOpacity(0.5)),
+                    ),
+                  ),
+                
+                const SizedBox(height: AppSpacing.sm),
+                
+                Text(
+                  'Photos help us review your case faster. Accepted: product condition, delivery issues, etc.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey.shade600,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+                
+                const SizedBox(height: AppSpacing.lg),
+              ],
+
               // Info message
               Container(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
-                  color: AppTheme.infoBlue.withOpacity(0.1),
+                  color: widget.targetType == 'order' 
+                      ? Colors.orange.withOpacity(0.1)
+                      : AppTheme.infoBlue.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: AppTheme.infoBlue.withOpacity(0.3),
+                    color: widget.targetType == 'order'
+                        ? Colors.orange.withOpacity(0.3)
+                        : AppTheme.infoBlue.withOpacity(0.3),
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(
-                      Icons.info_outline,
-                      color: AppTheme.infoBlue,
+                      widget.targetType == 'order' ? Icons.admin_panel_settings : Icons.info_outline,
+                      color: widget.targetType == 'order' ? Colors.orange.shade700 : AppTheme.infoBlue,
                       size: 20,
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
-                        'Your report will be reviewed by our team. False reports may result in account restrictions.',
+                        widget.targetType == 'order'
+                            ? '⚡ Priority Report: Order issues are reviewed by admins within 24 hours. For delivery failures, a refund may be granted.'
+                            : 'Your report will be reviewed by our team. False reports may result in account restrictions.',
                         style: TextStyle(
                           fontSize: 12,
-                          color: AppTheme.infoBlue,
+                          color: widget.targetType == 'order' ? Colors.orange.shade700 : AppTheme.infoBlue,
+                          fontWeight: widget.targetType == 'order' ? FontWeight.w500 : FontWeight.normal,
                         ),
                       ),
                     ),

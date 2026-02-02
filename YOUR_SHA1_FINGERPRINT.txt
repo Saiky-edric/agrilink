@@ -1,0 +1,60 @@
+# Your SHA-1 Certificate Fingerprint
+
+## Debug Keystore SHA-1:
+
+A9:3E:35:D8:38:E5:6D:ED:58:87:04:73:F9:AF:23:FF:E0:26:97:D2
+
+---
+
+## Where to Use This:
+
+### 1. Google Cloud Console (For Supabase Setup)
+
+1. Go to: https://console.cloud.google.com
+2. Select your project
+3. Go to: **APIs & Services** → **Credentials**
+4. Click: **Create Credentials** → **OAuth client ID**
+5. Select: **Android**
+6. Fill in:
+   - Name: `Agrilink Android`
+   - Package name: `com.example.agrilink1`
+   - **SHA-1 certificate fingerprint**: 
+     ```
+     A9:3E:35:D8:38:E5:6D:ED:58:87:04:73:F9:AF:23:FF:E0:26:97:D2
+     ```
+7. Click **Create**
+
+---
+
+## Additional Information:
+
+**Keystore Type:** Debug (for development/testing)
+**Valid Until:** Saturday, 20 November 2055
+**Alias:** AndroidDebugKey
+
+**Also Available:**
+- **MD5:** 4B:6F:FB:7A:84:9A:7E:AF:78:FC:57:47:F3:D1:A2:28
+- **SHA-256:** 47:6A:1F:D0:6B:3E:A8:86:90:29:2F:06:B7:66:FD:DE:CE:49:4F:8F:67:DC:71:FB:0A:45:FC:07:91:11:ED:1D
+
+---
+
+## ⚠️ Important Notes:
+
+1. **This is for DEBUG builds only**
+   - Works on emulators and test devices
+   - For production APK, you'll need the RELEASE keystore SHA-1
+
+2. **Getting Release SHA-1 (when ready for production):**
+   ```bash
+   keytool -list -v -keystore your-release-key.keystore -alias your-key-alias
+   ```
+
+3. **Multiple SHA-1s Supported:**
+   - You can add both DEBUG and RELEASE SHA-1s to Google Cloud
+   - Recommended: Add debug now, add release later
+
+---
+
+## Next Step:
+
+Use this SHA-1 to create your Android OAuth client in Google Cloud Console!

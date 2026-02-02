@@ -472,6 +472,14 @@ class _FarmerOrderDetailsScreenState extends State<FarmerOrderDetailsScreen> {
                           children: [
                             _buildOrderHeader(),
                             const SizedBox(height: 20),
+                            
+                            // Detailed Order Timeline
+                            DetailedOrderTimeline(
+                              order: _order!,
+                              showDuration: true,
+                            ),
+                            const SizedBox(height: 20),
+                            
                             _buildBuyerInfo(),
                             const SizedBox(height: 20),
                             _buildOrderItems(),

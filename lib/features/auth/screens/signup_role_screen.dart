@@ -138,7 +138,7 @@ class _CleanRoleCardState extends State<_CleanRoleCard> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          color: _isHovered ? widget.color.withOpacity(0.05) : Colors.white,
+          color: _isHovered ? widget.color.withValues(alpha: 0.05) : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: _isHovered ? widget.color : Colors.grey[300]!,
@@ -153,7 +153,7 @@ class _CleanRoleCardState extends State<_CleanRoleCard> {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: widget.color.withOpacity(0.1),
+                color: widget.color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(

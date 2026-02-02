@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../auth/screens/privacy_policy_screen.dart';
+import '../../auth/screens/terms_of_service_screen.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/auth_service.dart';
@@ -360,9 +362,11 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
                 title: 'Privacy Policy',
                 subtitle: 'Read our privacy terms',
                 onTap: () {
-                  // TODO: Navigate to privacy policy
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Privacy Policy - Coming Soon')),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const PrivacyPolicyScreen(),
+                    ),
                   );
                 },
               ),
@@ -371,7 +375,19 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
                 title: 'Terms of Service',
                 subtitle: 'Read our terms and conditions',
                 onTap: () {
-                  // TODO: Navigate to terms
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const TermsOfServiceScreen(),
+                    ),
+                  );
+                },
+              ),
+              _buildProfileOption(
+                icon: Icons.info_outlined,
+                title: 'About Agrilink',
+                subtitle: 'App version and info',
+                onTap: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Terms of Service - Coming Soon')),
                   );

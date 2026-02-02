@@ -411,6 +411,28 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ),
 
+            const SizedBox(height: AppSpacing.md),
+
+            _buildActionCard(
+              context,
+              'Order Management',
+              'Report farmer faults and manage order issues',
+              Icons.assignment_late,
+              Colors.orange.shade600,
+              () => context.push('/admin/order-management'),
+            ),
+
+            const SizedBox(height: AppSpacing.md),
+
+            _buildActionCard(
+              context,
+              'Refund Management',
+              'Review and process refund requests',
+              Icons.currency_exchange,
+              Colors.purple.shade600,
+              () => context.push('/admin/refund-management'),
+            ),
+
             const SizedBox(height: AppSpacing.xl),
 
             // Analytics Charts Section

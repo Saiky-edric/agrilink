@@ -4,7 +4,6 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/models/user_model.dart';
-import '../../../shared/widgets/custom_button.dart';
 
 class SocialRoleSelectionScreen extends StatefulWidget {
   const SocialRoleSelectionScreen({super.key});
@@ -15,12 +14,9 @@ class SocialRoleSelectionScreen extends StatefulWidget {
 
 class _SocialRoleSelectionScreenState extends State<SocialRoleSelectionScreen> {
   final AuthService _authService = AuthService();
-  UserRole? _selectedRole;
   bool _isLoading = false;
 
-  Future<void> _handleRoleSelection() async {
-    if (_selectedRole == null) return;
-
+  Future<void> _handleRoleSelection(UserRole role) async {
     setState(() => _isLoading = true);
 
     try {
@@ -30,9 +26,9 @@ class _SocialRoleSelectionScreenState extends State<SocialRoleSelectionScreen> {
       }
 
       // Complete the social user profile with selected role
-      final updatedUser = await _authService.completeSocialUserProfile(
+      await _authService.completeSocialUserProfile(
         userId: currentUser.id,
-        role: _selectedRole!,
+        role: role,
       );
 
       if (mounted) {
@@ -55,211 +51,188 @@ class _SocialRoleSelectionScreenState extends State<SocialRoleSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: const Text(
-          'Complete Setup',
-          style: AppTextStyles.heading2,
-        ),
-        centerTitle: true,
-      ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: AppSpacing.xl),
-              
-              // Welcome message
-              const Text(
-                'Welcome to AgrLink!',
-                style: AppTextStyles.heading1,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              const Text(
-                'To complete your account setup, please select your role:',
-                style: AppTextStyles.bodyMedium,
-              ),
-              
-              const SizedBox(height: AppSpacing.xxl),
-              
-              // Buyer option
-              _RoleCard(
-                title: 'I want to buy fresh products',
-                subtitle: 'Browse and purchase fresh agricultural products from verified local farmers',
-                icon: Icons.shopping_basket_outlined,
-                color: AppTheme.primaryGreen,
-                isSelected: _selectedRole == UserRole.buyer,
-                onTap: () {
-                  setState(() {
-                    _selectedRole = UserRole.buyer;
-                  });
-                },
-              ),
-              
-              const SizedBox(height: AppSpacing.lg),
-              
-              // Farmer option
-              _RoleCard(
-                title: 'I want to sell my farm products',
-                subtitle: 'List and sell your agricultural products directly to local buyers',
-                icon: Icons.agriculture_outlined,
-                color: AppTheme.accentGreen,
-                isSelected: _selectedRole == UserRole.farmer,
-                onTap: () {
-                  setState(() {
-                    _selectedRole = UserRole.farmer;
-                  });
-                },
-              ),
-              
-              const Spacer(),
-              
-              // Continue button
-              CustomButton(
-                text: 'Continue',
-                type: ButtonType.primary,
-                isFullWidth: true,
-                isLoading: _isLoading,
-                onPressed: _selectedRole != null ? _handleRoleSelection : null,
-              ),
-              
-              const SizedBox(height: AppSpacing.md),
-              
-              // Note about verification
-              if (_selectedRole == UserRole.farmer)
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: AppTheme.accentGreen.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppTheme.accentGreen.withValues(alpha: 0.3)),
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Back button
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: _isLoading ? null : () => context.pop(),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        color: AppTheme.accentGreen,
-                        size: 20,
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Text(
-                          'As a farmer, you\'ll need to complete verification before you can start selling.',
-                          style: TextStyle(
-                            color: AppTheme.accentGreen,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
+                  
+                  SizedBox(height: screenHeight * 0.02),
+                  
+                  // Title
+                  const Text(
+                    'Join Agrilink',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Choose your account type',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  
+                  SizedBox(height: screenHeight * 0.04),
+                  
+                  // Buyer Card
+                  _CleanRoleCard(
+                    title: 'Buyer',
+                    description: 'Browse and purchase fresh products from local farmers',
+                    icon: Icons.shopping_cart_outlined,
+                    color: AppTheme.primaryGreen,
+                    isLoading: _isLoading,
+                    onTap: () => _handleRoleSelection(UserRole.buyer),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Farmer Card
+                  _CleanRoleCard(
+                    title: 'Farmer',
+                    description: 'Sell your agricultural products to local buyers',
+                    icon: Icons.agriculture_outlined,
+                    color: const Color(0xFF2E7D32),
+                    isLoading: _isLoading,
+                    onTap: () => _handleRoleSelection(UserRole.farmer),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Loading overlay
+            if (_isLoading)
+              Container(
+                color: Colors.black.withValues(alpha: 0.3),
+                child: const Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryGreen),
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _RoleCard extends StatelessWidget {
+class _CleanRoleCard extends StatefulWidget {
   final String title;
-  final String subtitle;
+  final String description;
   final IconData icon;
   final Color color;
-  final bool isSelected;
+  final bool isLoading;
   final VoidCallback onTap;
 
-  const _RoleCard({
+  const _CleanRoleCard({
     required this.title,
-    required this.subtitle,
+    required this.description,
     required this.icon,
     required this.color,
-    required this.isSelected,
+    required this.isLoading,
     required this.onTap,
   });
 
   @override
+  State<_CleanRoleCard> createState() => _CleanRoleCardState();
+}
+
+class _CleanRoleCardState extends State<_CleanRoleCard> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: isSelected ? 4 : 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-        side: BorderSide(
-          color: isSelected ? color : color.withValues(alpha: 0.3),
-          width: isSelected ? 2 : 1,
+    return GestureDetector(
+      onTapDown: widget.isLoading ? null : (_) => setState(() => _isHovered = true),
+      onTapUp: widget.isLoading ? null : (_) {
+        setState(() => _isHovered = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: _isHovered ? widget.color.withValues(alpha: 0.05) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _isHovered ? widget.color : Colors.grey[300]!,
+            width: _isHovered ? 2 : 1.5,
+          ),
         ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-            color: isSelected ? color.withValues(alpha: 0.05) : Colors.transparent,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: isSelected ? 0.2 : 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    icon,
-                    color: color,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: AppTextStyles.heading3.copyWith(
-                          color: color,
-                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        subtitle,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: isSelected ? AppTheme.textPrimary : AppTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (isSelected)
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                  ),
-              ],
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            // Icon container
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: widget.color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                widget.icon,
+                color: widget.color,
+                size: 28,
+              ),
             ),
-          ),
+            
+            const SizedBox(width: 16),
+            
+            // Text content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.title,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: widget.color,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.description,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                      height: 1.4,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            
+            // Arrow icon
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 16,
+              color: widget.color,
+            ),
+          ],
         ),
       ),
     );

@@ -8,7 +8,7 @@ class CartService {
   final SupabaseService _supabase = SupabaseService.instance;
   final AuthService _authService = AuthService();
 
-  // Get cart items for current user
+  // Get cart items for current user with availability check
   Future<CartModel> getCart() async {
     try {
       final currentUser = _authService.currentUser;
@@ -35,6 +35,8 @@ class CartService {
               farm_location,
               weight_per_unit,
               is_hidden,
+              status,
+              deleted_at,
               created_at,
               updated_at,
               farmer:farmer_id (
@@ -58,6 +60,71 @@ class CartService {
       return CartModel.fromItems(items);
     } catch (e) {
       return const CartModel();
+    }
+  }
+
+  // Check if cart items are available and valid
+  Future<Map<String, dynamic>> validateCart() async {
+    try {
+      final cart = await getCart();
+      final unavailableItems = <CartItemModel>[];
+      final outOfStockItems = <CartItemModel>[];
+      final availableItems = <CartItemModel>[];
+
+      for (final item in cart.items) {
+        if (item.product == null) {
+          unavailableItems.add(item);
+          continue;
+        }
+
+        final product = item.product!;
+        
+        // Check if product is deleted, hidden, or expired
+        if (product.isDeleted || product.isHidden || product.isExpired) {
+          unavailableItems.add(item);
+        }
+        // Check if product has insufficient stock
+        else if (product.stock < item.quantity) {
+          outOfStockItems.add(item);
+        } else {
+          availableItems.add(item);
+        }
+      }
+
+      return {
+        'isValid': unavailableItems.isEmpty && outOfStockItems.isEmpty,
+        'availableItems': availableItems,
+        'unavailableItems': unavailableItems,
+        'outOfStockItems': outOfStockItems,
+        'hasIssues': unavailableItems.isNotEmpty || outOfStockItems.isNotEmpty,
+      };
+    } catch (e) {
+      return {
+        'isValid': false,
+        'availableItems': <CartItemModel>[],
+        'unavailableItems': <CartItemModel>[],
+        'outOfStockItems': <CartItemModel>[],
+        'hasIssues': true,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  // Auto-remove unavailable items from cart
+  Future<int> removeUnavailableItems() async {
+    try {
+      final validation = await validateCart();
+      final unavailableItems = validation['unavailableItems'] as List<CartItemModel>;
+      
+      int removedCount = 0;
+      for (final item in unavailableItems) {
+        await removeFromCart(item.id);
+        removedCount++;
+      }
+      
+      return removedCount;
+    } catch (e) {
+      return 0;
     }
   }
 

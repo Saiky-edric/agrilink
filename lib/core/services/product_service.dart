@@ -423,6 +423,25 @@ class ProductService {
     }
   }
 
+  // Check if product has orders (for warning before deletion)
+  Future<Map<String, dynamic>> checkProductHasOrders(String productId) async {
+    try {
+      final response = await _supabase.client.rpc('check_product_has_orders', params: {
+        'product_id_param': productId,
+      });
+      return response as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('Error checking product orders: $e');
+      // Return safe default if function doesn't exist yet
+      return {
+        'has_orders': false,
+        'total_orders': 0,
+        'active_orders': 0,
+        'completed_orders': 0,
+      };
+    }
+  }
+
   // Delete product (soft delete)
   Future<void> deleteProduct(String productId) async {
     try {

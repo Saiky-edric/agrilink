@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/route_names.dart';
@@ -7,6 +8,9 @@ import '../../../core/models/user_model.dart';
 import '../../../core/utils/keyboard_utils.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/custom_text_field.dart';
+import 'terms_of_service_screen.dart';
+import 'privacy_policy_screen.dart';
+import 'otp_verification_screen.dart';
 
 class SignupBuyerScreen extends StatefulWidget {
   const SignupBuyerScreen({super.key});
@@ -53,28 +57,34 @@ class _SignupBuyerScreenState extends State<SignupBuyerScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await _authService.signUp(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-        fullName: _fullNameController.text.trim(),
-        phoneNumber: _phoneController.text.trim(),
-        role: UserRole.buyer,
-      );
+      // Send OTP to email for verification
+      await _authService.sendSignupOTP(_emailController.text.trim());
 
-      if (response.user != null && mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Account created successfully! Please verify your email.'),
+            content: Text('Verification code sent! Check your email.'),
             backgroundColor: AppTheme.successGreen,
+            behavior: SnackBarBehavior.floating,
           ),
         );
-        context.go(RouteNames.addressSetup);
+        
+        // Navigate to OTP verification with signup data
+        context.push(
+          RouteNames.otpVerification,
+          extra: SignupData(
+            email: _emailController.text.trim(),
+            fullName: _fullNameController.text.trim(),
+            phoneNumber: _phoneController.text.trim(),
+            role: UserRole.buyer,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Signup failed: ${e.toString()}'),
+            content: Text('Failed to send verification code: ${e.toString().replaceFirst('Exception: ', '')}'),
             backgroundColor: AppTheme.errorRed,
           ),
         );
@@ -202,7 +212,7 @@ class _SignupBuyerScreenState extends State<SignupBuyerScreen> {
                       activeColor: AppTheme.primaryGreen,
                     ),
                     const SizedBox(width: AppSpacing.sm),
-                    const Expanded(
+                    Expanded(
                       child: Text.rich(
                         TextSpan(
                           text: 'I agree to the ',
@@ -210,18 +220,38 @@ class _SignupBuyerScreenState extends State<SignupBuyerScreen> {
                           children: [
                             TextSpan(
                               text: 'Terms of Service',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: AppTheme.primaryGreen,
                                 fontWeight: FontWeight.w500,
+                                decoration: TextDecoration.underline,
                               ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const TermsOfServiceScreen(),
+                                    ),
+                                  );
+                                },
                             ),
-                            TextSpan(text: ' and '),
+                            const TextSpan(text: ' and '),
                             TextSpan(
                               text: 'Privacy Policy',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: AppTheme.primaryGreen,
                                 fontWeight: FontWeight.w500,
+                                decoration: TextDecoration.underline,
                               ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const PrivacyPolicyScreen(),
+                                    ),
+                                  );
+                                },
                             ),
                           ],
                         ),

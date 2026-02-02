@@ -22,6 +22,9 @@ class _CartScreenState extends State<CartScreen> {
   bool _isLoading = true;
   bool _isUpdating = false;
   
+  // Track unavailable items
+  Map<String, dynamic>? _cartValidation;
+  
   @override
   void initState() {
     super.initState();
@@ -41,6 +44,9 @@ class _CartScreenState extends State<CartScreen> {
     try {
       setState(() => _isLoading = true);
       
+      // Validate cart for unavailable items
+      final validation = await _cartService.validateCart();
+      
       final cartByStore = await _cartService.getCartByStore();
       final Map<String, Map<String, dynamic>> storeInfoMap = {};
       
@@ -55,14 +61,158 @@ class _CartScreenState extends State<CartScreen> {
       setState(() {
         _cartByStore = cartByStore;
         _storeInfo = storeInfoMap;
+        _cartValidation = validation;
         _isLoading = false;
       });
+      
+      // Show warning if there are unavailable items
+      if (mounted && validation['hasIssues'] == true) {
+        _showUnavailableItemsDialog(validation);
+      }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to load cart: $e'),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
+      }
+    }
+  }
+  
+  void _showUnavailableItemsDialog(Map<String, dynamic> validation) {
+    final unavailableItems = validation['unavailableItems'] as List<CartItemModel>;
+    final outOfStockItems = validation['outOfStockItems'] as List<CartItemModel>;
+    
+    if (unavailableItems.isEmpty && outOfStockItems.isEmpty) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
+            const SizedBox(width: 8),
+            const Text('Cart Items Unavailable'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (unavailableItems.isNotEmpty) ...[
+                const Text(
+                  'The following items are no longer available:',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                ...unavailableItems.map((item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.close, size: 16, color: Colors.red),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          item.product?.name ?? 'Unknown Product',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+                const SizedBox(height: 16),
+              ],
+              if (outOfStockItems.isNotEmpty) ...[
+                const Text(
+                  'The following items have insufficient stock:',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                ...outOfStockItems.map((item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.inventory_2, size: 16, color: Colors.orange),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${item.product?.name ?? 'Unknown'} (${item.quantity} needed, ${item.product?.stock ?? 0} available)',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+                const SizedBox(height: 16),
+              ],
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Would you like to remove unavailable items from your cart?',
+                        style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Keep in Cart'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _removeUnavailableItems(validation);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Remove Unavailable'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Future<void> _removeUnavailableItems(Map<String, dynamic> validation) async {
+    try {
+      setState(() => _isUpdating = true);
+      
+      final removedCount = await _cartService.removeUnavailableItems();
+      await _loadCart();
+      
+      setState(() => _isUpdating = false);
+      
+      if (mounted && removedCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$removedCount unavailable item${removedCount > 1 ? 's' : ''} removed from cart'),
+            backgroundColor: AppTheme.successGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isUpdating = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to remove items: $e'),
             backgroundColor: AppTheme.errorRed,
           ),
         );
@@ -549,30 +699,59 @@ class _CartScreenState extends State<CartScreen> {
   }
   
   Widget _buildModernCartItem(CartItemModel item) {
+    // Check if item is unavailable
+    final isUnavailable = item.product == null || 
+                          item.product!.isDeleted || 
+                          item.product!.isHidden || 
+                          item.product!.isExpired;
+    final isOutOfStock = item.product != null && item.product!.stock < item.quantity;
+    
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: isUnavailable || isOutOfStock ? BoxDecoration(
+        border: Border.all(color: Colors.orange.shade300, width: 2),
+        borderRadius: BorderRadius.circular(12),
+      ) : null,
       child: Row(
         children: [
-          // Product Image
-          Container(
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: Colors.grey.shade100,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                item.product?.coverImageUrl ?? '',
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Icon(
-                  Icons.agriculture,
-                  color: AppTheme.primaryGreen,
-                  size: 30,
+          // Product Image with overlay for unavailable
+          Stack(
+            children: [
+              Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.grey.shade100,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    item.product?.coverImageUrl ?? '',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Icon(
+                      Icons.agriculture,
+                      color: AppTheme.primaryGreen,
+                      size: 30,
+                    ),
+                  ),
                 ),
               ),
-            ),
+              if (isUnavailable)
+                Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.black.withOpacity(0.6),
+                  ),
+                  child: const Icon(
+                    Icons.block,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                ),
+            ],
           ),
           
           const SizedBox(width: 16),
@@ -584,9 +763,11 @@ class _CartScreenState extends State<CartScreen> {
               children: [
                 Text(
                   item.product?.name ?? 'Product Name',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
+                    decoration: isUnavailable ? TextDecoration.lineThrough : null,
+                    color: isUnavailable ? Colors.grey : AppTheme.textPrimary,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -601,6 +782,63 @@ class _CartScreenState extends State<CartScreen> {
                     color: Colors.grey.shade600,
                   ),
                 ),
+                
+                // Show unavailable badge
+                if (isUnavailable) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.red.shade300),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.error_outline, size: 12, color: Colors.red.shade700),
+                        const SizedBox(width: 4),
+                        Text(
+                          item.product == null 
+                              ? 'Not Available'
+                              : item.product!.isExpired
+                                  ? 'Expired'
+                                  : 'Removed',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.red.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (isOutOfStock) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.orange.shade300),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.inventory_2, size: 12, color: Colors.orange.shade700),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Only ${item.product!.stock} available',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 
                 // Quantity and Total Row
@@ -687,17 +925,106 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  // Store-specific checkout method
-  void _checkoutStore(String farmerId, List<CartItemModel> items) {
+  // Store-specific checkout method with validation
+  void _checkoutStore(String farmerId, List<CartItemModel> items) async {
+    // Validate items before checkout
+    final validation = await _cartService.validateCart();
+    final storeItems = items.map((i) => i.id).toSet();
+    
+    // Filter validation results for this specific store
+    final unavailableInStore = (validation['unavailableItems'] as List<CartItemModel>)
+        .where((item) => storeItems.contains(item.id))
+        .toList();
+    final outOfStockInStore = (validation['outOfStockItems'] as List<CartItemModel>)
+        .where((item) => storeItems.contains(item.id))
+        .toList();
+    
+    // Prevent checkout if there are issues
+    if (unavailableInStore.isNotEmpty || outOfStockInStore.isNotEmpty) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.block, color: Colors.red.shade700),
+                const SizedBox(width: 8),
+                const Text('Cannot Checkout'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Some items in your cart are unavailable or out of stock.',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+                if (unavailableInStore.isNotEmpty)
+                  Text(
+                    '• ${unavailableInStore.length} unavailable item${unavailableInStore.length > 1 ? 's' : ''}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                if (outOfStockInStore.isNotEmpty)
+                  Text(
+                    '• ${outOfStockInStore.length} out of stock item${outOfStockInStore.length > 1 ? 's' : ''}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Please remove these items or adjust quantities before proceeding.',
+                          style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await _removeUnavailableItems(validation);
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Remove Unavailable'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+    
     // Navigate to checkout with specific store items
-    context.push(
-      RouteNames.checkout,
-      extra: {
-        'farmerId': farmerId,
-        'items': items,
-        'storeInfo': _storeInfo[farmerId],
-      },
-    );
+    if (mounted) {
+      context.push(
+        RouteNames.checkout,
+        extra: {
+          'farmerId': farmerId,
+          'items': items,
+          'storeInfo': _storeInfo[farmerId],
+        },
+      );
+    }
   }
 }
 

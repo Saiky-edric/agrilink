@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/models/order_model.dart';
 import '../../core/theme/app_theme.dart';
+import 'order_map_tracking.dart';
 
 class OrderStatusChip extends StatelessWidget {
   final FarmerOrderStatus status;
@@ -736,4 +739,663 @@ class BuyerInformationCard extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Detailed order timeline widget that shows all status changes with timestamps
+/// Supports real-time updates via Supabase subscriptions
+class DetailedOrderTimeline extends StatefulWidget {
+  final OrderModel order;
+  final bool showDuration;
+  final bool enableRealtime;
+
+  const DetailedOrderTimeline({
+    super.key,
+    required this.order,
+    this.showDuration = true,
+    this.enableRealtime = true,
+  });
+
+  @override
+  State<DetailedOrderTimeline> createState() => _DetailedOrderTimelineState();
+}
+
+class _DetailedOrderTimelineState extends State<DetailedOrderTimeline> {
+  late OrderModel _currentOrder;
+  StreamSubscription<List<Map<String, dynamic>>>? _orderSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentOrder = widget.order;
+    if (widget.enableRealtime) {
+      _subscribeToOrderUpdates();
+    }
+  }
+
+  @override
+  void dispose() {
+    _orderSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _subscribeToOrderUpdates() {
+    // Subscribe to real-time order updates
+    _orderSubscription = Supabase.instance.client
+        .from('orders')
+        .stream(primaryKey: ['id'])
+        .eq('id', widget.order.id)
+        .listen((data) {
+          if (data.isNotEmpty && mounted) {
+            setState(() {
+              _currentOrder = OrderModel.fromJson(data.first);
+            });
+          }
+        });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final timelineEvents = _buildTimelineEvents();
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.timeline_rounded,
+                    color: Colors.blue.shade700,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Order Timeline',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                ),
+                if (widget.enableRealtime)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.green.shade200),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade600,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Live',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            
+            // Timeline events
+            ...List.generate(timelineEvents.length, (index) {
+              final event = timelineEvents[index];
+              final isLast = index == timelineEvents.length - 1;
+              
+              return _buildTimelineItem(
+                event: event,
+                isLast: isLast,
+                showDuration: widget.showDuration && index > 0 && event.timestamp != null,
+                previousEvent: index > 0 ? timelineEvents[index - 1] : null,
+              );
+            }),
+            
+            // Map tracking (for delivery orders in transit)
+            if (_currentOrder.farmerStatus == FarmerOrderStatus.toDeliver &&
+                _currentOrder.deliveryMethod == 'delivery' &&
+                _currentOrder.buyerLatitude != null &&
+                _currentOrder.buyerLongitude != null) ...[
+              const SizedBox(height: 20),
+              _buildMapTracking(),
+            ],
+            
+            // Total order duration (if completed)
+            if (_currentOrder.completedAt != null && widget.showDuration) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.timer, size: 18, color: Colors.green.shade700),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Total Duration: ${_formatDuration(_currentOrder.createdAt, _currentOrder.completedAt!)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.green.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            
+            // Estimated delivery time (for pending orders)
+            if (_currentOrder.farmerStatus == FarmerOrderStatus.toDeliver &&
+                _currentOrder.estimatedDeliveryAt != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.access_time, size: 18, color: Colors.blue.shade700),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Estimated Delivery',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blue.shade700,
+                            ),
+                          ),
+                          Text(
+                            DateFormat('MMM dd, yyyy • hh:mm a').format(_currentOrder.estimatedDeliveryAt!),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.blue.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimelineItem({
+    required TimelineEvent event,
+    required bool isLast,
+    bool showDuration = false,
+    TimelineEvent? previousEvent,
+  }) {
+    final isCompleted = event.timestamp != null;
+    final isPending = !isCompleted;
+
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Timeline indicator
+            Column(
+              children: [
+                // Status circle
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isCompleted ? event.color : Colors.transparent,
+                    border: Border.all(
+                      color: isCompleted ? event.color : Colors.grey.shade300,
+                      width: 2.5,
+                    ),
+                    boxShadow: isCompleted ? [
+                      BoxShadow(
+                        color: event.color.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ] : null,
+                  ),
+                  child: Icon(
+                    isCompleted ? Icons.check_rounded : event.icon,
+                    size: 20,
+                    color: isCompleted ? Colors.white : Colors.grey.shade400,
+                  ),
+                ),
+                
+                // Connecting line
+                if (!isLast)
+                  Container(
+                    width: 2.5,
+                    height: showDuration ? 60 : 50,
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: isCompleted
+                            ? [event.color, event.color.withOpacity(0.3)]
+                            : [Colors.grey.shade300, Colors.grey.shade300],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            
+            const SizedBox(width: 16),
+            
+            // Event details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Status title
+                  Text(
+                    event.title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: isCompleted ? Colors.grey.shade900 : Colors.grey.shade500,
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 4),
+                  
+                  // Description
+                  Text(
+                    event.description,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 6),
+                  
+                  // Timestamp
+                  if (event.timestamp != null) ...[
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.access_time,
+                          size: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatTimestamp(event.timestamp!),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    // Duration since previous event
+                    if (showDuration && previousEvent?.timestamp != null) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.timer_outlined,
+                              size: 12,
+                              color: Colors.grey.shade700,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _formatDuration(previousEvent!.timestamp!, event.timestamp!),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade700,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ] else ...[
+                    Text(
+                      'Pending...',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  List<TimelineEvent> _buildTimelineEvents() {
+    final events = <TimelineEvent>[];
+    
+    // Order placed
+    events.add(TimelineEvent(
+      status: FarmerOrderStatus.newOrder,
+      title: 'Order Placed',
+      description: _currentOrder.deliveryMethod == 'pickup' 
+          ? 'Your order has been submitted for pickup'
+          : 'Your order has been submitted',
+      icon: Icons.receipt_long,
+      color: Colors.blue.shade600,
+      timestamp: _currentOrder.createdAt,
+    ));
+    
+    // For non-cancelled orders, add progression steps
+    if (_currentOrder.farmerStatus != FarmerOrderStatus.cancelled) {
+      // Order accepted
+      events.add(TimelineEvent(
+        status: FarmerOrderStatus.accepted,
+        title: 'Order Confirmed',
+        description: 'Farmer has accepted your order',
+        icon: Icons.verified,
+        color: Colors.teal.shade600,
+        timestamp: _getStatusTimestamp(FarmerOrderStatus.accepted),
+      ));
+      
+      // Being prepared
+      events.add(TimelineEvent(
+        status: FarmerOrderStatus.toPack,
+        title: 'Preparing Order',
+        description: 'Your items are being packed',
+        icon: Icons.inventory_rounded,
+        color: Colors.orange.shade600,
+        timestamp: _getStatusTimestamp(FarmerOrderStatus.toPack),
+      ));
+      
+      // Check if pickup or delivery
+      if (_currentOrder.deliveryMethod == 'pickup') {
+        // Pickup flow
+        events.add(TimelineEvent(
+          status: FarmerOrderStatus.readyForPickup,
+          title: 'Ready for Pickup',
+          description: _currentOrder.pickupAddress != null 
+              ? 'Available at: ${_currentOrder.pickupAddress}'
+              : 'Your order is ready to be picked up',
+          icon: Icons.storefront_rounded,
+          color: Colors.purple.shade600,
+          timestamp: _getStatusTimestamp(FarmerOrderStatus.readyForPickup),
+        ));
+      } else {
+        // Delivery flow
+        events.add(TimelineEvent(
+          status: FarmerOrderStatus.toDeliver,
+          title: 'Out for Delivery',
+          description: _currentOrder.trackingNumber != null 
+              ? 'Tracking: ${_currentOrder.trackingNumber}'
+              : 'Your order is on the way',
+          icon: Icons.local_shipping_rounded,
+          color: Colors.indigo.shade600,
+          timestamp: _getStatusTimestamp(FarmerOrderStatus.toDeliver),
+        ));
+      }
+      
+      // Completed
+      events.add(TimelineEvent(
+        status: FarmerOrderStatus.completed,
+        title: _currentOrder.deliveryMethod == 'pickup' ? 'Order Picked Up' : 'Order Delivered',
+        description: _currentOrder.deliveryNotes ?? 'Order completed successfully',
+        icon: Icons.task_alt_rounded,
+        color: Colors.green.shade600,
+        timestamp: _currentOrder.completedAt,
+      ));
+    } else {
+      // Cancelled order
+      events.add(TimelineEvent(
+        status: FarmerOrderStatus.cancelled,
+        title: 'Order Cancelled',
+        description: 'This order has been cancelled',
+        icon: Icons.cancel_rounded,
+        color: Colors.red.shade600,
+        timestamp: _currentOrder.updatedAt ?? _currentOrder.createdAt,
+      ));
+    }
+    
+    return events;
+  }
+
+  DateTime? _getStatusTimestamp(FarmerOrderStatus targetStatus) {
+    // Use individual timestamps from the order model
+    switch (targetStatus) {
+      case FarmerOrderStatus.newOrder:
+        return _currentOrder.createdAt;
+      case FarmerOrderStatus.accepted:
+        return _currentOrder.acceptedAt;
+      case FarmerOrderStatus.toPack:
+        return _currentOrder.toPackAt;
+      case FarmerOrderStatus.toDeliver:
+        return _currentOrder.toDeliverAt;
+      case FarmerOrderStatus.readyForPickup:
+        return _currentOrder.readyForPickupAt;
+      case FarmerOrderStatus.completed:
+        return _currentOrder.completedAt;
+      case FarmerOrderStatus.cancelled:
+        return _currentOrder.cancelledAt;
+    }
+  }
+
+  bool _isStatusReached(FarmerOrderStatus targetStatus) {
+    final currentIndex = _getStatusIndex(_currentOrder.farmerStatus);
+    final targetIndex = _getStatusIndex(targetStatus);
+    return currentIndex >= targetIndex;
+  }
+
+  int _getStatusIndex(FarmerOrderStatus status) {
+    const statusOrder = [
+      FarmerOrderStatus.newOrder,
+      FarmerOrderStatus.accepted,
+      FarmerOrderStatus.toPack,
+      FarmerOrderStatus.toDeliver,
+      FarmerOrderStatus.readyForPickup,
+      FarmerOrderStatus.completed,
+    ];
+    final index = statusOrder.indexOf(status);
+    return index >= 0 ? index : 0;
+  }
+
+  String _formatTimestamp(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+    
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes} min ago';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours} hr ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays} days ago';
+    }
+    
+    return DateFormat('MMM dd, yyyy • hh:mm a').format(timestamp);
+  }
+
+  String _formatDuration(DateTime start, DateTime end) {
+    final duration = end.difference(start);
+    
+    if (duration.inMinutes < 1) {
+      return 'Less than a minute';
+    } else if (duration.inHours < 1) {
+      return '${duration.inMinutes} minutes';
+    } else if (duration.inDays < 1) {
+      final hours = duration.inHours;
+      final minutes = duration.inMinutes % 60;
+      if (minutes > 0) {
+        return '$hours hr $minutes min';
+      }
+      return '$hours hours';
+    } else {
+      final days = duration.inDays;
+      final hours = duration.inHours % 24;
+      if (hours > 0) {
+        return '$days days $hours hr';
+      }
+      return '$days days';
+    }
+  }
+
+  Widget _buildMapTracking() {
+    // Import the map tracking widget dynamically
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.map_rounded, size: 18, color: Colors.blue.shade700),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Live Delivery Tracking',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blue.shade700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Your order is on the way! Track real-time location below.',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                // Navigate to full map tracking screen
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) {
+                      // Lazy load the map widget
+                      try {
+                        // Import is done at top of file, so we can use it directly
+                        return Scaffold(
+                          appBar: AppBar(
+                            title: const Text('Delivery Tracking'),
+                            backgroundColor: AppTheme.primaryGreen,
+                            foregroundColor: Colors.white,
+                          ),
+                          body: OrderMapTracking(
+                            order: _currentOrder,
+                            showRoute: true,
+                            height: double.infinity,
+                          ),
+                        );
+                      } catch (e) {
+                        return Scaffold(
+                          appBar: AppBar(title: const Text('Map Unavailable')),
+                          body: Center(
+                            child: Text('Map tracking is not available: $e'),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                );
+              },
+              icon: const Icon(Icons.map_rounded, size: 18),
+              label: const Text('View Live Map'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class TimelineEvent {
+  final FarmerOrderStatus status;
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final DateTime? timestamp;
+
+  TimelineEvent({
+    required this.status,
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.color,
+    this.timestamp,
+  });
 }

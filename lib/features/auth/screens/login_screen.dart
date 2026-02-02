@@ -4,11 +4,13 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/device_service.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/utils/keyboard_utils.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/custom_text_field.dart';
 import '../../../shared/widgets/social_sign_in_button.dart';
+import 'otp_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,6 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final AuthService _authService = AuthService();
+  final DeviceService _deviceService = DeviceService();
 
   bool _isLoading = false;
   bool _isGoogleLoading = false;
@@ -45,6 +48,42 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (response.user != null) {
+        // Check if this device is trusted for this user
+        final isTrusted = await _deviceService.isDeviceTrusted(response.user!.id);
+        
+        if (!isTrusted) {
+          // Device not trusted - require OTP verification
+          // Sign out temporarily
+          await _authService.signOut();
+          
+          setState(() => _isLoading = false);
+          
+          if (mounted) {
+            // Show message
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('New device detected! Sending verification code...'),
+                backgroundColor: AppTheme.primaryGreen,
+                behavior: SnackBarBehavior.floating,
+                duration: Duration(seconds: 2),
+              ),
+            );
+            
+            // Send OTP to user's email
+            await _authService.sendLoginOTP(_emailController.text.trim());
+            
+            if (!mounted) return;
+            
+            // Navigate to OTP verification
+            context.push(
+              RouteNames.otpVerification,
+              extra: LoginOTPData(email: _emailController.text.trim()),
+            );
+          }
+          return;
+        }
+        
+        // Device is trusted - proceed with normal login
         // Check if user has completed address setup
         final hasCompletedAddress = await _authService
             .hasCompletedAddressSetup();
@@ -58,6 +97,15 @@ class _LoginScreenState extends State<LoginScreen> {
         final user = await _authService.getCurrentUserProfile();
 
         if (user != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Welcome back!'),
+              backgroundColor: AppTheme.successGreen,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 1),
+            ),
+          );
+          
           switch (user.role) {
             case UserRole.buyer:
               context.go(RouteNames.buyerHome);
@@ -135,6 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
         break;
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

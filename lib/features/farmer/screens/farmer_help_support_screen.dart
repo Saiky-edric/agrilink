@@ -85,10 +85,10 @@ class FarmerHelpSupportScreen extends StatelessWidget {
 
             _buildQuickActionCard(
               icon: Icons.chat,
-              title: 'Live Chat Support',
-              subtitle: 'Chat with our support team',
+              title: 'AI Support Assistant',
+              subtitle: 'Get instant answers to your questions',
               color: AppTheme.primaryGreen,
-              onTap: () => _showChatDialog(context),
+              onTap: () => context.push('/farmer/support-chat'),
             ),
 
             const SizedBox(height: AppSpacing.sm),
@@ -400,21 +400,6 @@ class FarmerHelpSupportScreen extends StatelessWidget {
     );
   }
 
-  void _showChatDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Live Chat Support'),
-        content: const Text('Live chat feature will be available soon. For immediate assistance, please call or email us.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _showCallDialog(BuildContext context) {
     showDialog(

@@ -398,13 +398,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 const SizedBox(height: AppSpacing.xl),
 
                 // Add to cart button
-                CustomButton(
-                  text: _isAddingToCart 
-                      ? 'Adding to Cart...' 
-                      : 'Add to Cart - ₱${(p.price * _quantity).toStringAsFixed(2)}',
-                  onPressed: _isAddingToCart ? null : _addToCart,
-                  isLoading: _isAddingToCart,
+                SizedBox(
                   width: double.infinity,
+                  child: CustomButton(
+                    text: _isAddingToCart 
+                        ? 'Adding...' 
+                        : 'Add to Cart • ₱${(p.price * _quantity).toStringAsFixed(2)}',
+                    onPressed: _isAddingToCart ? null : _addToCart,
+                    isLoading: _isAddingToCart,
+                  ),
                 ),
 
                 const SizedBox(height: AppSpacing.xl),

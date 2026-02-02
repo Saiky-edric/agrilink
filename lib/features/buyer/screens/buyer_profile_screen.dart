@@ -13,6 +13,8 @@ import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/loading_widgets.dart';
 import '../../../shared/widgets/modern_bottom_nav.dart';
 import 'my_reports_screen.dart';
+import '../../auth/screens/privacy_policy_screen.dart';
+import '../../auth/screens/terms_of_service_screen.dart';
 class BuyerProfileScreen extends StatefulWidget {
   const BuyerProfileScreen({super.key});
 
@@ -366,13 +368,27 @@ class _BuyerProfileScreenState extends State<BuyerProfileScreen> {
                 icon: Icons.privacy_tip_outlined,
                 title: 'Privacy Policy',
                 subtitle: 'Read our privacy terms',
-                onTap: () => _showPrivacyPolicyDialog(),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const PrivacyPolicyScreen(),
+                    ),
+                  );
+                },
               ),
               _buildProfileOption(
                 icon: Icons.description_outlined,
                 title: 'Terms of Service',
                 subtitle: 'Read our terms and conditions',
-                onTap: () => _showTermsOfServiceDialog(),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const TermsOfServiceScreen(),
+                    ),
+                  );
+                },
               ),
             ]),
             

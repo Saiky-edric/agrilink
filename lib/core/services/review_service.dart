@@ -30,6 +30,16 @@ class ReviewService {
       
       // Process each review with images
       for (var review in productReviews) {
+        // Check if product still exists (handle deleted products gracefully)
+        final productCheck = await _client
+            .from('products')
+            .select('id')
+            .eq('id', review.productId)
+            .maybeSingle();
+        
+        // If product was deleted, we still allow review submission
+        // The review will be linked to the product_id for historical reference
+        
         List<String> imageUrls = [];
         
         // Upload images if provided
@@ -47,7 +57,7 @@ class ReviewService {
           }
         }
         
-        // Insert review with image URLs
+        // Insert review with image URLs (even if product is deleted)
         await _client.from('product_reviews').insert({
           'product_id': review.productId,
           'user_id': buyerId,
@@ -56,6 +66,10 @@ class ReviewService {
           'image_urls': imageUrls.isNotEmpty ? imageUrls : null,
           'created_at': DateTime.now().toIso8601String(),
         });
+        
+        if (productCheck == null) {
+          debugPrint('⚠️ Review submitted for deleted product: ${review.productId}');
+        }
       }
 
       debugPrint('Product reviews submitted successfully');

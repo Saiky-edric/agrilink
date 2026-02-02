@@ -152,7 +152,23 @@ class TransactionService {
     }
   }
 
-  /// Create a refund request
+  /// Check refund eligibility using strict policy
+  Future<Map<String, dynamic>> checkRefundEligibility(String orderId) async {
+    try {
+      final response = await _supabase.client
+          .rpc('check_refund_eligibility', params: {'p_order_id': orderId});
+      
+      return Map<String, dynamic>.from(response as Map);
+    } catch (e) {
+      return {
+        'eligible': false,
+        'reason': 'Failed to check eligibility: $e',
+        'eligibility_type': null,
+      };
+    }
+  }
+
+  /// Create a refund request with eligibility validation
   Future<RefundRequestModel> createRefundRequest({
     required String orderId,
     required double amount,
@@ -165,24 +181,41 @@ class TransactionService {
         throw Exception('User not authenticated');
       }
 
+      // Check eligibility using strict policy
+      final eligibility = await checkRefundEligibility(orderId);
+      
+      if (eligibility['eligible'] != true) {
+        throw Exception(eligibility['reason'] ?? 'You are not eligible to request a refund for this order');
+      }
+
       // Get the transaction for this order
       final transactions = await getOrderTransactions(orderId);
-      final paymentTransaction = transactions.firstWhere(
-        (t) => t.type == TransactionType.payment,
-        orElse: () => throw Exception('No payment transaction found for this order'),
-      );
+      
+      String? transactionId;
+      try {
+        final paymentTransaction = transactions.firstWhere(
+          (t) => t.type == TransactionType.payment,
+        );
+        transactionId = paymentTransaction.id;
+      } catch (e) {
+        // No payment transaction found - might be COD/COP
+        transactionId = null;
+      }
 
-      // Create refund request
+      final eligibilityType = eligibility['eligibility_type'] as String?;
+
+      // Create refund request with eligibility reason
       final response = await _supabase.client
           .from('refund_requests')
           .insert({
             'order_id': orderId,
             'user_id': currentUser.id,
-            'transaction_id': paymentTransaction.id,
+            'transaction_id': transactionId,
             'amount': amount,
             'reason': reason,
             'additional_details': additionalDetails,
             'status': 'pending',
+            'eligibility_reason': eligibilityType,
           })
           .select()
           .single();

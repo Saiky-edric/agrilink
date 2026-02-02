@@ -699,7 +699,7 @@ class _ModernProductDetailsScreenState extends State<ModernProductDetailsScreen>
                 child: Container(
                   height: 56,
                   margin: const EdgeInsets.only(right: 8),
-                  child: ElevatedButton.icon(
+                  child: ElevatedButton(
                     onPressed: (_product!.stock > 0 && !_isAddingToCart) ? _addToCart : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
@@ -709,17 +709,33 @@ class _ModernProductDetailsScreenState extends State<ModernProductDetailsScreen>
                         borderRadius: BorderRadius.circular(16),
                       ),
                       elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                     ),
-                    icon: _isAddingToCart 
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_isAddingToCart)
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.shopping_cart_outlined),
-                    label: Text(
-                      _isAddingToCart ? 'Adding...' : 'Add to Cart',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                        else
+                          const Icon(Icons.shopping_cart_outlined, size: 20),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            _isAddingToCart ? 'Adding...' : 'Add to Cart',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

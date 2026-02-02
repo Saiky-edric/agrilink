@@ -113,9 +113,10 @@ class AuthService {
       
       EnvironmentConfig.log('🔑 Client IDs - Web: $webClientId, Android: $androidClientId');
 
-      // Try different approach for Android
+      // Add serverClientId for Supabase authentication
       final GoogleSignIn googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
+        serverClientId: EnvironmentConfig.googleWebClientId, // ← ADDED THIS!
       );
 
       EnvironmentConfig.log('📱 Initiating Google sign-in...');
@@ -224,6 +225,172 @@ class AuthService {
       await _supabase.client.auth.resetPasswordForEmail(email);
     } catch (e) {
       ErrorHandler.logError('Auth Service - Password Reset', e);
+      throw Exception(ErrorHandler.handleAuthError(e));
+    }
+  }
+
+  // Send OTP to email for signup verification
+  Future<void> sendSignupOTP(String email) async {
+    try {
+      EnvironmentConfig.log('📧 Sending signup OTP to: $email');
+      
+      await _supabase.client.auth.signInWithOtp(
+        email: email,
+        emailRedirectTo: null, // Not needed for OTP codes
+        shouldCreateUser: true, // Allow user creation during OTP signup
+      );
+      
+      EnvironmentConfig.log('✅ Signup OTP sent successfully to: $email');
+    } catch (e) {
+      EnvironmentConfig.logError('❌ Failed to send signup OTP', e);
+      ErrorHandler.logError('Auth Service - Send Signup OTP', e);
+      throw Exception(ErrorHandler.handleAuthError(e));
+    }
+  }
+
+  // Verify OTP code and create user account for signup
+  Future<AuthResponse> verifySignupOTP({
+    required String email,
+    required String token,
+    required String fullName,
+    required String phoneNumber,
+    required UserRole role,
+  }) async {
+    try {
+      EnvironmentConfig.log('🔐 Verifying signup OTP for: $email');
+      
+      final response = await _supabase.client.auth.verifyOTP(
+        email: email,
+        token: token,
+        type: OtpType.email,
+      );
+
+      if (response.user != null) {
+        EnvironmentConfig.log('✅ OTP verified successfully for: ${response.user!.email}');
+        
+        // Check if user profile already exists
+        final existingUser = await _supabase.users
+            .select()
+            .eq('id', response.user!.id)
+            .maybeSingle();
+
+        if (existingUser == null) {
+          EnvironmentConfig.log('👤 Creating user profile after OTP verification...');
+          
+          // Create user profile with provided information
+          await _createUserProfile(
+            userId: response.user!.id,
+            email: email,
+            fullName: fullName,
+            phoneNumber: phoneNumber,
+            role: role,
+          );
+          
+          EnvironmentConfig.log('✅ Profile created successfully for new user');
+        } else {
+          EnvironmentConfig.log('✅ User profile already exists');
+          
+          // Check if user is suspended
+          if (existingUser['is_active'] == false) {
+            await _supabase.client.auth.signOut();
+            throw Exception('Your account has been suspended. Please contact support.');
+          }
+        }
+
+        // Clear cache and fetch fresh profile
+        _profileService.clearCache();
+        await getCurrentUserProfile();
+      }
+
+      return response;
+    } catch (e) {
+      EnvironmentConfig.logError('❌ Signup OTP verification failed', e);
+      ErrorHandler.logError('Auth Service - Verify Signup OTP', e);
+      throw Exception(ErrorHandler.handleAuthError(e));
+    }
+  }
+
+  // Resend OTP for signup
+  Future<void> resendSignupOTP(String email) async {
+    try {
+      EnvironmentConfig.log('🔄 Resending signup OTP to: $email');
+      await sendSignupOTP(email);
+      EnvironmentConfig.log('✅ Signup OTP resent successfully');
+    } catch (e) {
+      EnvironmentConfig.logError('❌ Failed to resend signup OTP', e);
+      ErrorHandler.logError('Auth Service - Resend Signup OTP', e);
+      throw Exception(ErrorHandler.handleAuthError(e));
+    }
+  }
+
+  // Send OTP for login on untrusted device
+  Future<void> sendLoginOTP(String email) async {
+    try {
+      EnvironmentConfig.log('📧 Sending login OTP to: $email');
+      
+      await _supabase.client.auth.signInWithOtp(
+        email: email,
+        emailRedirectTo: null,
+      );
+      
+      EnvironmentConfig.log('✅ Login OTP sent successfully to: $email');
+    } catch (e) {
+      EnvironmentConfig.logError('❌ Failed to send login OTP', e);
+      ErrorHandler.logError('Auth Service - Send Login OTP', e);
+      throw Exception(ErrorHandler.handleAuthError(e));
+    }
+  }
+
+  // Verify OTP code for login on untrusted device
+  Future<AuthResponse> verifyLoginOTP({
+    required String email,
+    required String token,
+  }) async {
+    try {
+      EnvironmentConfig.log('🔐 Verifying login OTP for: $email');
+      
+      final response = await _supabase.client.auth.verifyOTP(
+        email: email,
+        token: token,
+        type: OtpType.email,
+      );
+
+      if (response.user != null) {
+        EnvironmentConfig.log('✅ Login OTP verified successfully for: ${response.user!.email}');
+        
+        // Check if user is suspended
+        final existingUser = await _supabase.users
+            .select()
+            .eq('id', response.user!.id)
+            .maybeSingle();
+
+        if (existingUser != null && existingUser['is_active'] == false) {
+          await _supabase.client.auth.signOut();
+          throw Exception('Your account has been suspended. Please contact support.');
+        }
+
+        // Clear cache and fetch fresh profile
+        _profileService.clearCache();
+        await getCurrentUserProfile();
+      }
+
+      return response;
+    } catch (e) {
+      EnvironmentConfig.logError('❌ Login OTP verification failed', e);
+      ErrorHandler.logError('Auth Service - Verify Login OTP', e);
+      throw Exception(ErrorHandler.handleAuthError(e));
+    }
+  }
+
+  // Resend OTP for login
+  Future<void> resendLoginOTP(String email) async {
+    try {
+      EnvironmentConfig.log('🔄 Resending login OTP to: $email');
+      await sendLoginOTP(email);
+      EnvironmentConfig.log('✅ Login OTP resent successfully');
+    } catch (e) {
+      EnvironmentConfig.logError('❌ Failed to resend login OTP', e);
+      ErrorHandler.logError('Auth Service - Resend Login OTP', e);
       throw Exception(ErrorHandler.handleAuthError(e));
     }
   }

@@ -102,7 +102,14 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                 size: 20,
               ),
             ),
-            onPressed: () => context.push(RouteNames.supportChat),
+            onPressed: () {
+              // Navigate to role-specific AI support
+              if (_currentUser?.role == UserRole.farmer) {
+                context.push(RouteNames.farmerSupportChat);
+              } else {
+                context.push(RouteNames.supportChat); // Buyer support
+              }
+            },
           ),
           IconButton(
             icon: Container(

@@ -8,6 +8,11 @@ class AiSupportService {
     'delivery': ['delivery', 'deliver', 'shipping', 'ship', 'receive', 'address'],
     'pickup': ['pickup', 'pick up', 'collect', 'fetch'],
     'cancel': ['cancel', 'cancellation', 'refund', 'return'],
+    'report': ['report', 'issue', 'problem', 'complaint', 'dispute', 'fraud'],
+    'wishlist': ['wishlist', 'favorite', 'saved', 'heart'],
+    'notification': ['notification', 'alert', 'update', 'notify'],
+    'premium': ['premium', 'featured', 'subscription', 'badge'],
+    'photo': ['photo', 'image', 'picture', 'upload'],
     'track': ['track', 'tracking', 'status', 'where is my'],
     'product': ['product', 'item', 'fresh', 'quality', 'expired', 'shelf life'],
     'account': ['account', 'profile', 'password', 'login', 'sign in'],
@@ -74,12 +79,20 @@ class AiSupportService {
     ],
     'cancel': [
       {
+        'question': 'What is the new refund policy?',
+        'answer': '🔒 STRICT REFUND POLICY:\n\n✅ Refunds Allowed BEFORE farmer starts packing:\n• Order status: "Pending" or "Accepted"\n• You can cancel freely during these stages\n\n🚫 Refunds NOT allowed AFTER packing starts:\n• Once farmer starts preparing (toPack status)\n• Inventory is committed\n• Perishable products affected\n\n⚠️ EXCEPTION - Farmer Fault:\nRefunds ARE allowed at any stage if:\n• Delivery deadline exceeded (auto-detected)\n• Product never delivered\n• Wrong items delivered\n• Quality issues (farmer responsibility)\n• Admin marks farmer at fault\n\nThis protects both buyers and farmers!'
+      },
+      {
         'question': 'How do I get a refund?',
-        'answer': 'Refund Policy:\n\n• COD Orders: No refund needed (you haven\'t paid yet)\n• GCash Prepaid: Refunds processed for cancelled orders\n\nTo request a refund:\n1. Cancel your order (if still pending/accepted)\n2. Admin reviews the cancellation\n3. Refunds are processed within 3-5 business days\n\nNote: Orders in "Preparing" or later stages may not be eligible for full refunds.'
+        'answer': 'Refund Process:\n\n💰 COD/COP Orders:\n• No refund needed (you haven\'t paid yet)\n• Just cancel if order is still "Pending" or "Accepted"\n\n💳 GCash Prepaid Orders:\n• BEFORE packing: Use "Cancel Order" button\n• AFTER packing: Use "Request Refund" button\n• Admin reviews your request\n• Refunds processed in 3-5 business days\n\n📸 For order issues:\n1. Go to Order Details\n2. Tap 3-dot menu → "Report Issue"\n3. Upload photos of the problem\n4. Admin reviews (priority within 24 hours)\n5. Refund granted if farmer is at fault'
       },
       {
         'question': 'What is the cancellation policy?',
-        'answer': 'You can cancel orders freely when:\n• Status is "Pending"\n• Status is "Accepted"\n\nLimited/no cancellation when:\n• Status is "Preparing" or later\n• Food is already prepared\n\nAlways communicate with farmers if you need to cancel later-stage orders.'
+        'answer': 'Cancellation Rules:\n\n✅ FREE CANCELLATION:\n• Order status: "Pending" (waiting for farmer)\n• Order status: "Accepted" (farmer confirmed)\n• COD/COP: No payment involved yet\n• GCash: Only if payment NOT verified\n\n🚫 CANNOT CANCEL:\n• Status: "Preparing" (toPack) or later\n• GCash with verified payment (use "Request Refund")\n• Farmer already started preparing\n\n⏰ Time-Sensitive:\n• Cancel early to avoid issues\n• Delivery deadline: 5 days after acceptance\n• If deadline exceeded, you can request refund\n\n💡 TIP: Always contact farmer if you need to cancel late!'
+      },
+      {
+        'question': 'Why can\'t I cancel my order?',
+        'answer': 'Common reasons:\n\n1️⃣ GCash Payment Verified:\n• Money already transferred to farmer\n• Must use "Request Refund" instead\n• Admin processes refund requests\n\n2️⃣ Payment Proof Uploaded (unverified):\n• Wait for admin verification\n• Protection against money loss\n• Can request refund after verification\n\n3️⃣ Farmer Already Preparing:\n• Status: "Preparing" or later\n• Inventory committed\n• Contact farmer or request refund\n\n4️⃣ Order Completed/Cancelled:\n• Already final status\n• Contact support if there\'s an issue'
       },
     ],
     'track': [
@@ -176,6 +189,68 @@ class AiSupportService {
         'answer': 'Agrilink product categories:\n• Vegetables\n• Fruits\n• Rice & Grains\n• Meat & Poultry\n• Fish & Seafood\n• Eggs & Dairy\n• Herbs & Spices\n• Others\n\nBrowse categories from home screen or Categories tab!'
       },
     ],
+    'report': [
+      {
+        'question': 'How do I report an order issue?',
+        'answer': '📸 NEW: Report with Photos!\n\n1. Go to "My Orders"\n2. Select the order with issue\n3. Tap 3-dot menu (⋮) → "Report Issue"\n4. Select reason for report\n5. Add description (required)\n6. Upload up to 3 photos (optional but recommended)\n7. Submit report\n\n⚡ Priority Review:\n• Order reports reviewed within 24 hours\n• Photos help admins process faster\n• May be eligible for refund if farmer at fault\n\nAccepted photos: product condition, delivery issues, damaged items, etc.'
+      },
+      {
+        'question': 'What can I report?',
+        'answer': 'Report Types:\n\n📦 Order Issues:\n• Product never delivered\n• Delivery very late\n• Product quality (rotten/damaged)\n• Wrong items delivered\n• Incomplete order\n• Farmer not responding\n\n🥬 Product Issues:\n• Misleading information\n• Fake/counterfeit product\n• Inappropriate content\n• Price manipulation\n\n👤 User Issues:\n• Spam or scam\n• Harassment\n• Fraudulent activity\n\nAll reports reviewed by admins. False reports may result in account restrictions.'
+      },
+      {
+        'question': 'Can I view my submitted reports?',
+        'answer': 'Yes! Track your reports:\n\n1. Go to Profile\n2. Tap "My Reports"\n3. See all submitted reports\n4. View report status:\n   • Pending - Under review\n   • Resolved - Issue handled\n   • Rejected - Not valid\n\nYou\'ll also receive notifications when report status changes!'
+      },
+    ],
+    'wishlist': [
+      {
+        'question': 'How do I add items to my wishlist?',
+        'answer': 'Save your favorite products:\n\n1. Browse products on home screen\n2. Tap any product to view details\n3. Tap the heart icon (♡) in top right\n4. Product added to wishlist!\n\nYou can also:\n• Tap heart icon on product cards\n• Add multiple products\n• Remove anytime by tapping heart again\n\nView wishlist: Profile → Wishlist or bottom navigation'
+      },
+      {
+        'question': 'Why did items disappear from wishlist?',
+        'answer': 'Items removed if:\n• Product deleted by farmer\n• Product out of stock permanently\n• Product expired (shelf-life ended)\n• Farmer deactivated their store\n\nDon\'t worry! You\'ll see notification when this happens. Look for similar products from other farmers.'
+      },
+      {
+        'question': 'Can I buy directly from wishlist?',
+        'answer': 'Yes! Quick checkout from wishlist:\n\n1. Go to Wishlist\n2. Tap product to view details\n3. Select quantity\n4. Add to cart or buy now\n\nTip: Check wishlist regularly for price drops or stock updates!'
+      },
+    ],
+    'notification': [
+      {
+        'question': 'What notifications will I receive?',
+        'answer': 'You get notified about:\n\n📦 Order Updates:\n• Farmer accepted your order\n• Order being prepared\n• Out for delivery\n• Order delivered/ready for pickup\n• Order cancelled/rejected\n\n💰 Payment Updates:\n• Payment verified (GCash)\n• Refund approved/processed\n\n⭐ Reviews:\n• Reminder to review completed orders\n\n🚨 Issues:\n• Refund available (farmer fault)\n• Report status updates\n\n❤️ Favorites:\n• Followed stores have new products'
+      },
+      {
+        'question': 'How do I view notifications?',
+        'answer': 'Access notifications:\n\n1. Tap bell icon (🔔) on home screen\n2. See all notifications\n3. Tap notification to view details\n4. Badge shows unread count\n\nNotifications auto-mark as read when viewed. Clear notifications anytime!'
+      },
+      {
+        'question': 'Can I turn off notifications?',
+        'answer': 'Manage notification settings:\n\n1. Go to Profile\n2. Tap Settings\n3. Notification Preferences\n4. Toggle specific types on/off\n\nRecommended to keep on:\n• Order status updates\n• Payment confirmations\n• Important alerts'
+      },
+    ],
+    'premium': [
+      {
+        'question': 'What is a Premium Farmer?',
+        'answer': '⭐ Premium Farmers have benefits:\n\n🏆 Gold Badge:\n• Shows on store profile\n• Verified established sellers\n• Commitment to quality\n\n📢 Enhanced Visibility:\n• Featured in premium carousel on home\n• Higher ranking in search results\n• Priority listing\n• Daily rotation showcase\n\n✅ For Buyers:\n• Easy to identify quality sellers\n• Premium products featured daily\n• Support verified local farmers\n\nLook for the gold ⭐ badge!'
+      },
+      {
+        'question': 'Are premium products better quality?',
+        'answer': 'Premium status means:\n\n✅ Verified seller (not product quality)\n• Farmers pay subscription for visibility\n• All farmers must meet verification standards\n• Product quality depends on farmer practices\n\n💡 Check:\n• Product reviews and ratings\n• Seller rating on profile\n• Product freshness info\n• Distance from your location\n\nBoth free and premium farmers offer quality products!'
+      },
+    ],
+    'photo': [
+      {
+        'question': 'Can I upload photos with my review?',
+        'answer': 'Yes! Photo reviews encouraged:\n\n1. Complete an order\n2. Go to "My Orders"\n3. Tap "Write Review"\n4. Rate product (1-5 stars)\n5. Write review (optional)\n6. Tap "Add Photos"\n7. Upload up to 3 photos\n8. Submit review\n\n📸 Benefits:\n• Help other buyers decide\n• Show actual product quality\n• More credible reviews\n• Support transparent marketplace'
+      },
+      {
+        'question': 'Where can I upload photos?',
+        'answer': 'Photo uploads available for:\n\n1️⃣ Product Reviews:\n• Up to 3 photos per review\n• After order completion\n\n2️⃣ Order Reports:\n• Up to 3 photos per report\n• Document issues/problems\n• Helps admin review faster\n\n3️⃣ GCash Payment Proof:\n• Screenshot of payment\n• Transaction receipt\n\n📸 Tips:\n• Use clear, well-lit photos\n• Show relevant details\n• Accepted: JPG, PNG images'
+      },
+    ],
   };
 
   // Greeting messages
@@ -187,8 +262,8 @@ class AiSupportService {
 
   // Default responses when no match is found
   static const List<String> _defaultResponses = [
-    'I\'m not quite sure about that. Here are some topics I can help with:\n\n• Placing and tracking orders\n• Payment methods (COD, GCash)\n• Delivery and pickup options\n• Product quality and freshness\n• Account management\n• Contacting farmers\n• Reviews and ratings\n\nWhat would you like to know more about?',
-    'Hmm, I don\'t have specific information about that. Let me suggest some common topics:\n\n📦 Orders & Tracking\n💰 Payments & Refunds\n🚚 Delivery & Pickup\n🥬 Product Quality\n👤 Account Settings\n⭐ Reviews & Ratings\n\nPlease ask about any of these!',
+    'I\'m not quite sure about that. Here are some topics I can help with:\n\n• Placing and tracking orders\n• Payment methods (COD, GCash)\n• Delivery and pickup options\n• Cancellation & refund policy (NEW)\n• Reporting issues with photos (NEW)\n• Product quality and freshness\n• Wishlist and notifications\n• Premium farmers\n• Account management\n• Reviews with photos\n\nWhat would you like to know more about?',
+    'Hmm, I don\'t have specific information about that. Let me suggest some common topics:\n\n📦 Orders & Tracking\n💰 Payments & Refunds (NEW POLICY)\n🚚 Delivery & Pickup\n📸 Report Issues with Photos (NEW)\n🥬 Product Quality\n❤️ Wishlist & Favorites\n🔔 Notifications\n⭐ Premium Farmers\n👤 Account Settings\n⭐ Reviews & Ratings\n\nPlease ask about any of these!',
   ];
 
   // Conversation history
@@ -378,12 +453,17 @@ class AiSupportService {
       '💰 What payment methods are available?',
       '🚚 How does delivery work?',
       '📍 Can I pick up my order instead?',
-      '❌ How do I cancel my order?',
+      '🔒 What is the new refund policy?',
+      '❌ Why can\'t I cancel my order?',
+      '📸 How do I report an order issue?',
       '📊 How do I track my order?',
+      '❤️ How do I add items to my wishlist?',
+      '🔔 What notifications will I receive?',
+      '⭐ What is a Premium Farmer?',
       '🥬 How do I know products are fresh?',
       '👤 How do I update my profile?',
       '👨‍🌾 How do I contact a farmer?',
-      '⭐ How do I leave a review?',
+      '📷 Can I upload photos with my review?',
     ];
   }
 }

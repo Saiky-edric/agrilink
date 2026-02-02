@@ -14,6 +14,7 @@ import '../../features/auth/screens/signup_farmer_screen.dart';
 import '../../features/auth/screens/address_setup_screen.dart';
 import '../../features/auth/screens/social_role_selection_screen.dart';
 import '../../features/auth/screens/forgot_password_screen.dart';
+import '../../features/auth/screens/otp_verification_screen.dart';
 import '../../features/buyer/screens/modern_product_details_screen.dart';
 import '../../features/buyer/screens/order_details_screen.dart';
 import '../../features/admin/screens/verification_details_screen.dart';
@@ -24,6 +25,7 @@ import '../../features/farmer/screens/farmer_profile_edit_screen.dart';
 import '../../features/farmer/screens/farm_information_screen.dart';
 import '../../features/farmer/screens/sales_analytics_screen.dart';
 import '../../features/farmer/screens/farmer_help_support_screen.dart';
+import '../../features/farmer/screens/farmer_support_chat_screen.dart';
 import '../../features/farmer/screens/verification_status_screen.dart';
 import '../../features/farmer/screens/public_farmer_profile_screen.dart';
 import '../../features/farmer/screens/farmer_reviews_screen.dart';
@@ -74,6 +76,7 @@ import '../../features/farmer/screens/request_payout_screen.dart';
 import '../../features/admin/screens/admin_payout_dashboard_screen.dart';
 import '../../features/admin/screens/admin_payment_verification_screen.dart';
 import '../../features/admin/screens/admin_refund_management_screen.dart';
+import '../../features/admin/screens/admin_order_management_screen.dart';
 import '../../features/buyer/screens/transaction_history_screen.dart';
 import '../../features/buyer/screens/payment_history_screen.dart';
 import '../../core/models/payout_request_model.dart';
@@ -121,6 +124,20 @@ class AppRouter {
         path: RouteNames.forgotPassword,
         name: 'forgotPassword',
         builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.otpVerification,
+        name: 'otpVerification',
+        builder: (context, state) {
+          final data = state.extra;
+          if (data is SignupData) {
+            return OTPVerificationScreen(signupData: data);
+          } else if (data is LoginOTPData) {
+            return OTPVerificationScreen(loginData: data);
+          } else {
+            throw Exception('Invalid data type for OTP verification');
+          }
+        },
       ),
       GoRoute(
         path: RouteNames.addressSetup,
@@ -291,6 +308,11 @@ class AppRouter {
         path: RouteNames.farmerHelpSupport,
         name: 'farmerHelpSupport',
         builder: (context, state) => const FarmerHelpSupportScreen(),
+      ),
+      GoRoute(
+        path: '/farmer/support-chat',
+        name: RouteNames.farmerSupportChat,
+        builder: (context, state) => const FarmerSupportChatScreen(),
       ),
       GoRoute(
         path: '/farmer/verification-status',
@@ -569,6 +591,13 @@ class AppRouter {
         builder: (context, state) => const AdminRefundManagementScreen(),
       ),
 
+      // Admin Order Management (Report Farmer Faults)
+      GoRoute(
+        path: '/admin/order-management',
+        name: 'adminOrderManagement',
+        builder: (context, state) => const AdminOrderManagementScreen(),
+      ),
+
       // Transaction History
       GoRoute(
         path: RouteNames.transactionHistory,
@@ -616,6 +645,7 @@ class AppRouter {
       RouteNames.signupBuyer,
       RouteNames.signupFarmer,
       RouteNames.forgotPassword,
+      RouteNames.otpVerification,
     ];
 
     if (publicRoutes.contains(state.matchedLocation)) {
